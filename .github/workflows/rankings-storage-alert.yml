@@ -1,0 +1,24 @@
+name: rankings-storage-alert
+
+# Daily: open or update a "storage-alert" issue when database or file storage passes 80%
+# of the Supabase free limits.
+on:
+  schedule:
+    - cron: "23 7 * * *" # daily 07:23 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check usage against free limits
+        run: rankings/scripts/ops/storage-check.sh
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          GH_TOKEN: ${{ github.token }}
