@@ -1,0 +1,906 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PROTOTYPE · Global ranking algorithms</title>
+<style>
+  :root {
+    --accent: #4f46e5;
+    --accent-soft: #eef2ff;
+    --text: #1f2937;
+    --muted: #6b7280;
+    --line: #e5e7eb;
+    --bg: #f9fafb;
+    --good: #dcfce7;
+    --ok: #fef9c3;
+    --bad: #fee2e2;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; color: var(--text); background: var(--bg); }
+  header { padding: 28px 32px 20px; background: white; border-bottom: 1px solid var(--line); }
+  header h1 { margin: 0 0 6px; font-size: 22px; }
+  header p { margin: 4px 0; max-width: 900px; color: var(--muted); }
+  .tag { display: inline-block; font-size: 11px; font-weight: 600; letter-spacing: .05em; text-transform: uppercase; color: #b45309; background: #fef3c7; padding: 2px 8px; border-radius: 99px; margin-bottom: 8px; }
+  main { display: grid; grid-template-columns: 360px 1fr; gap: 24px; padding: 24px 32px 48px; align-items: start; }
+  aside { position: sticky; top: 16px; display: flex; flex-direction: column; gap: 16px; max-height: calc(100vh - 32px); overflow-y: auto; }
+  section.card { background: white; border: 1px solid var(--line); border-radius: 10px; padding: 16px 18px; }
+  section.card h2 { margin: 0 0 10px; font-size: 15px; }
+  section.card h3 { margin: 14px 0 6px; font-size: 13px; }
+  .muted { color: var(--muted); }
+  .small { font-size: 12px; }
+  button { font: inherit; cursor: pointer; border: 1px solid var(--line); background: white; color: var(--text); border-radius: 7px; padding: 7px 11px; text-align: left; }
+  button:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+  button:disabled { opacity: .4; cursor: default; }
+  button.primary { background: var(--accent); color: white; border-color: var(--accent); }
+  button.primary:hover:not(:disabled) { color: white; filter: brightness(1.1); }
+  .buttons { display: flex; flex-direction: column; gap: 6px; }
+  .tabs { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 10px; }
+  .tabs button { padding: 4px 9px; font-size: 12px; border-radius: 99px; }
+  .tabs button.active { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+  .steps { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; }
+  .steps button.done { background: #f3f4f6; color: var(--muted); }
+  .steps button.next { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+  .toggle { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+  .toggle button { border: none; border-radius: 0; padding: 6px 12px; }
+  .toggle button.active { background: var(--accent); color: white; }
+  label.field { display: grid; grid-template-columns: 1fr 90px; gap: 8px; align-items: center; margin: 5px 0; font-size: 13px; }
+  label.field input { font: inherit; padding: 4px 6px; border: 1px solid var(--line); border-radius: 6px; width: 100%; }
+  details summary { cursor: pointer; font-weight: 600; font-size: 15px; }
+  .stats { display: flex; flex-wrap: wrap; gap: 24px; margin-bottom: 10px; }
+  .stat .value { font-size: 22px; font-weight: 600; }
+  .stat .label { font-size: 12px; color: var(--muted); }
+  .note { background: var(--accent-soft); border-left: 3px solid var(--accent); padding: 8px 12px; border-radius: 4px; margin: 6px 0 0; }
+  table { border-collapse: collapse; width: 100%; }
+  th, td { padding: 6px 8px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+  th { font-size: 12px; color: var(--muted); font-weight: 600; background: white; position: sticky; top: 0; }
+  td.num, th.num { text-align: right; }
+  .table-wrap { max-height: 560px; overflow: auto; border: 1px solid var(--line); border-radius: 8px; }
+  .rank { font-weight: 600; }
+  .rating { display: block; font-size: 11px; color: var(--muted); white-space: nowrap; }
+  td.good { background: var(--good); }
+  td.ok { background: var(--ok); }
+  td.bad { background: var(--bad); }
+  tr.highlight td:nth-child(-n+3) { background: var(--accent-soft); font-weight: 600; }
+  .badge { font-size: 11px; color: var(--accent); background: var(--accent-soft); padding: 1px 6px; border-radius: 99px; margin-left: 4px; white-space: nowrap; }
+  .legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: 12px; margin-top: 6px; }
+  .legend span::before { content: ""; display: inline-block; width: 14px; height: 3px; margin-right: 5px; vertical-align: middle; background: var(--c); }
+  .content { display: flex; flex-direction: column; gap: 20px; min-width: 0; }
+  dl.algos { display: grid; grid-template-columns: 110px 1fr; gap: 4px 12px; margin: 0; font-size: 13px; }
+  dl.algos dt { font-weight: 600; }
+  dl.algos dd { margin: 0; color: var(--muted); }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="tag">Throwaway prototype · nothing is saved</div>
+  <h1>Which global ranking algorithm should Second Quint Rankings use?</h1>
+  <p>Every contestant below has a hidden <strong>true strength</strong>, meaning how much people really prefer them. Simulated players run random-draw tournaments and Infinite Mode sessions, picking winners the way real people would: usually the stronger contestant, but not always. Each algorithm sees only the match results and tries to rebuild the true order.</p>
+  <p>The question: which algorithm recovers the true order best from the kind of play our site produces, while accounting for strength of opponents, holding back contestants with few matches, and following tastes as they change?</p>
+</header>
+
+<main>
+  <aside>
+    <section class="card">
+      <h2>Guided walkthroughs</h2>
+      <div class="tabs" id="scenario-tabs"></div>
+      <div id="scenario-body"></div>
+    </section>
+
+    <section class="card">
+      <h2>Free play</h2>
+      <div class="buttons">
+        <button data-action="day1">Play 1 day</button>
+        <button data-action="day7">Play 7 days</button>
+        <button data-action="day30">Play 30 days</button>
+        <button data-action="giant">Run one tournament with every contestant</button>
+        <button data-action="newcomer">A strong newcomer joins</button>
+        <button data-action="rising">A mid-table contestant becomes everyone's favorite</button>
+      </div>
+    </section>
+
+    <section class="card">
+      <details id="settings">
+        <summary>Settings</summary>
+        <p class="small muted">Changes apply when you press the button below, which starts over.</p>
+        <label class="field">Contestants <input type="number" id="cfg-contestants" min="4" max="300"></label>
+        <label class="field">Tournaments per day <input type="number" id="cfg-tournaments" min="0" max="200"></label>
+        <label class="field">Contestants per tournament <input type="number" id="cfg-tournamentSize" min="2" max="300"></label>
+        <label class="field">Infinite Mode matches per day <input type="number" id="cfg-infinite" min="0" max="5000"></label>
+        <label class="field">How consistent players are (1 = normal) <input type="number" id="cfg-consistency" step="0.1" min="0.1" max="5"></label>
+        <label class="field">How much tastes drift each day <input type="number" id="cfg-drift" step="0.005" min="0" max="0.5"></label>
+        <label class="field">Strength gap between two categories (0 = no categories) <input type="number" id="cfg-categoryGap" step="0.5" min="0" max="5"></label>
+        <label class="field">Share of play that mixes categories <input type="number" id="cfg-crossShare" step="0.05" min="0" max="1"></label>
+        <label class="field">Bradley–Terry half-life (days, 0 = never fade) <input type="number" id="cfg-halfLife" min="0" max="3650"></label>
+        <label class="field">Elo step size (K) <input type="number" id="cfg-eloK" min="1" max="100"></label>
+        <label class="field">Random seed <input type="number" id="cfg-seed"></label>
+        <button class="primary" id="apply-settings" style="margin-top:8px">Apply and start over</button>
+      </details>
+    </section>
+  </aside>
+
+  <div class="content">
+    <section class="card">
+      <h2>Where things stand</h2>
+      <div class="stats" id="stats"></div>
+      <div class="note" id="note"></div>
+    </section>
+
+    <section class="card">
+      <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap">
+        <h2 style="margin:0">Scoreboard</h2>
+        <div>
+          <span class="small muted">Rank contestants by:</span>
+          <span class="toggle" id="mode-toggle">
+            <button data-mode="mean">Best guess</button>
+            <button data-mode="cautious">Cautious</button>
+          </span>
+        </div>
+      </div>
+      <p class="small muted" id="mode-explainer"></p>
+      <div id="scoreboard"></div>
+      <p class="small muted">
+        <strong>Ranking accuracy</strong>: how closely the algorithm's order matches the true order (100 is perfect, 0 is no better than shuffling).
+        <strong>Top 10 right</strong>: how many of the true top 10 it places in its own top 10.
+        <strong>Unproven in top 10</strong>: contestants in its top 10 with fewer than 5 matches (lower is safer).
+        <strong>Predicted matches right</strong>: before each day is played, the share of that day's matches whose winner the algorithm called correctly. This is the fairest real-world test, since it only uses information available at the time.
+      </p>
+    </section>
+
+    <section class="card">
+      <h2>Ranking accuracy over time</h2>
+      <div id="chart"></div>
+      <div class="legend" id="chart-legend"></div>
+    </section>
+
+    <section class="card">
+      <h2>Every contestant</h2>
+      <p class="small muted">Sorted by true strength. Each algorithm's column shows where it ranks that contestant, with its rating underneath. Green means within 2 places of the truth, yellow within 5, red further off.</p>
+      <div class="table-wrap" id="contestants"></div>
+    </section>
+
+    <section class="card">
+      <h2>The algorithms</h2>
+      <dl class="algos">
+        <dt>Elo</dt><dd>The classic chess rating. Every match moves both ratings by an amount that depends on how surprising the result was. It has no idea how confident it is, so a contestant who wins its first two matches can shoot up.</dd>
+        <dt>Glicko-2</dt><dd>Elo plus a confidence range (the ± number). The range shrinks as a contestant plays and grows again while it sits idle, and newer results count for more. Ratings update once per day.</dd>
+        <dt>TrueSkill</dt><dd>Microsoft's Xbox matchmaking rating. It uses a similar idea to Glicko-2, a rating plus a confidence range, but updates after every match. The name and method are Microsoft's; OpenSkill is an open equivalent.</dd>
+        <dt>Bradley–Terry</dt><dd>Re-fits all match history at once every day, so the order matches were played in doesn't matter and strength of opponents is used fully. Older matches fade out with a half-life (see Settings). Its ratings are shown on an Elo-like scale.</dd>
+        <dt>Win %</dt><dd>Wins divided by matches, ignoring who you beat. It's a baseline to show why strength of opponents matters.</dd>
+      </dl>
+    </section>
+  </div>
+</main>
+
+<script id="ranking-logic">
+// PROTOTYPE. Pure simulation and rating logic: no DOM access in this block.
+const RankingLab = (() => {
+  function mulberry32(seed) {
+    let a = seed >>> 0;
+    return () => {
+      a = (a + 0x6D2B79F5) >>> 0;
+      let t = a;
+      t = Math.imul(t ^ (t >>> 15), t | 1);
+      t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+  function gaussian(rng) {
+    let u = 0;
+    while (u === 0) u = rng();
+    return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * rng());
+  }
+  function shuffle(arr, rng) {
+    for (let i = arr.length - 1; i > 0; i--) {
+      const j = Math.floor(rng() * (i + 1));
+      [arr[i], arr[j]] = [arr[j], arr[i]];
+    }
+    return arr;
+  }
+  function weightedPick(weights, rng) {
+    let total = 0;
+    for (const w of weights) total += w;
+    let r = rng() * total;
+    for (let i = 0; i < weights.length; i++) {
+      r -= weights[i];
+      if (r <= 0) return i;
+    }
+    return weights.length - 1;
+  }
+  const logistic = x => 1 / (1 + Math.exp(-x));
+  function erf(x) {
+    const s = Math.sign(x);
+    x = Math.abs(x);
+    const t = 1 / (1 + 0.3275911 * x);
+    const y = 1 - (((((1.061405429 * t - 1.453152027) * t) + 1.421413741) * t - 0.284496736) * t + 0.254829592) * t * Math.exp(-x * x);
+    return s * y;
+  }
+  const normPdf = x => Math.exp(-x * x / 2) / Math.sqrt(2 * Math.PI);
+  const normCdf = x => 0.5 * (1 + erf(x / Math.SQRT2));
+
+  // ---------- Rating algorithms ----------
+  // Each algorithm: add() registers a new contestant, playDay(matches, day) learns from one day of
+  // matches ({ w, l } contestant indices), mean(i) is its best guess, cautious(i) holds back uncertain
+  // contestants, pWin(a, b) is its predicted chance that a beats b.
+
+  function makeElo({ k = 24 } = {}) {
+    const r = [];
+    const expected = (a, b) => 1 / (1 + 10 ** ((r[b] - r[a]) / 400));
+    return {
+      id: "elo", name: "Elo", color: "#9ca3af",
+      add() { r.push(1500); },
+      playDay(matches) {
+        for (const m of matches) {
+          const d = k * (1 - expected(m.w, m.l));
+          r[m.w] += d;
+          r[m.l] -= d;
+        }
+      },
+      mean: i => r[i],
+      cautious: i => r[i],
+      display: i => `${Math.round(r[i])}`,
+      pWin: expected,
+    };
+  }
+
+  function makeGlicko2({ tau = 0.5 } = {}) {
+    const SCALE = 173.7178;
+    const MAX_PHI = 350 / SCALE;
+    const mu = [], phi = [], sigma = [];
+    const g = p => 1 / Math.sqrt(1 + 3 * p * p / (Math.PI * Math.PI));
+    const E = (m, mj, pj) => 1 / (1 + Math.exp(-g(pj) * (m - mj)));
+    function newVolatility(p, s, v, delta) {
+      const a = Math.log(s * s);
+      const f = x => {
+        const ex = Math.exp(x);
+        return ex * (delta * delta - p * p - v - ex) / (2 * (p * p + v + ex) ** 2) - (x - a) / (tau * tau);
+      };
+      let A = a, B;
+      if (delta * delta > p * p + v) B = Math.log(delta * delta - p * p - v);
+      else {
+        let k = 1;
+        while (f(a - k * tau) < 0) k++;
+        B = a - k * tau;
+      }
+      let fA = f(A), fB = f(B), guard = 0;
+      while (Math.abs(B - A) > 1e-6 && guard++ < 100) {
+        const C = A + (A - B) * fA / (fB - fA);
+        const fC = f(C);
+        if (fC * fB <= 0) { A = B; fA = fB; } else fA /= 2;
+        B = C; fB = fC;
+      }
+      return Math.exp(A / 2);
+    }
+    return {
+      id: "glicko2", name: "Glicko-2", color: "#4f46e5",
+      add() { mu.push(0); phi.push(MAX_PHI); sigma.push(0.06); },
+      playDay(matches) {
+        const n = mu.length;
+        const games = Array.from({ length: n }, () => []);
+        for (const m of matches) {
+          games[m.w].push([m.l, 1]);
+          games[m.l].push([m.w, 0]);
+        }
+        const mu0 = mu.slice(), phi0 = phi.slice();
+        for (let i = 0; i < n; i++) {
+          if (!games[i].length) {
+            phi[i] = Math.min(MAX_PHI, Math.sqrt(phi0[i] ** 2 + sigma[i] ** 2));
+            continue;
+          }
+          let vInv = 0, sum = 0;
+          for (const [j, s] of games[i]) {
+            const gj = g(phi0[j]);
+            const e = E(mu0[i], mu0[j], phi0[j]);
+            vInv += gj * gj * e * (1 - e);
+            sum += gj * (s - e);
+          }
+          const v = 1 / vInv;
+          const s2 = newVolatility(phi0[i], sigma[i], v, v * sum);
+          const pStar = Math.sqrt(phi0[i] ** 2 + s2 * s2);
+          const pNew = 1 / Math.sqrt(1 / (pStar * pStar) + 1 / v);
+          sigma[i] = s2;
+          phi[i] = Math.min(MAX_PHI, pNew);
+          mu[i] = mu0[i] + pNew * pNew * sum;
+        }
+      },
+      mean: i => 1500 + SCALE * mu[i],
+      cautious: i => 1500 + SCALE * (mu[i] - 2 * phi[i]),
+      display: i => `${Math.round(1500 + SCALE * mu[i])} ± ${Math.round(2 * SCALE * phi[i])}`,
+      pWin: (a, b) => E(mu[a], mu[b], Math.sqrt(phi[a] ** 2 + phi[b] ** 2)),
+    };
+  }
+
+  function makeTrueSkill({ beta = 25 / 6, tau = 25 / 300 } = {}) {
+    const mu = [], s2 = [];
+    return {
+      id: "trueskill", name: "TrueSkill", color: "#0d9488",
+      add() { mu.push(25); s2.push((25 / 3) ** 2); },
+      playDay(matches) {
+        for (const { w, l } of matches) {
+          s2[w] += tau * tau;
+          s2[l] += tau * tau;
+          const c2 = 2 * beta * beta + s2[w] + s2[l];
+          const c = Math.sqrt(c2);
+          const t = (mu[w] - mu[l]) / c;
+          const v = normPdf(t) / Math.max(normCdf(t), 1e-12);
+          const ww = v * (v + t);
+          mu[w] += s2[w] / c * v;
+          mu[l] -= s2[l] / c * v;
+          s2[w] *= Math.max(1 - s2[w] / c2 * ww, 1e-4);
+          s2[l] *= Math.max(1 - s2[l] / c2 * ww, 1e-4);
+        }
+      },
+      mean: i => mu[i],
+      cautious: i => mu[i] - 3 * Math.sqrt(s2[i]),
+      display: i => `${mu[i].toFixed(1)} ± ${(3 * Math.sqrt(s2[i])).toFixed(1)}`,
+      pWin: (a, b) => normCdf((mu[a] - mu[b]) / Math.sqrt(2 * beta * beta + s2[a] + s2[b])),
+    };
+  }
+
+  function makeBradleyTerry({ halfLifeDays = 60 } = {}) {
+    // W[i][j] = (time-faded) wins of i over j. Every contestant also gets one virtual win and one
+    // virtual loss against an average phantom, which anchors the scale and tames 0-match contestants.
+    const ELO_SCALE = 400 / Math.LN10;
+    let W = [], p = [], se = [], lastDay = 0;
+    function fit() {
+      const n = p.length;
+      for (let iter = 0; iter < 40; iter++) {
+        const next = new Array(n);
+        for (let i = 0; i < n; i++) {
+          let wins = 1, den = 2 / (p[i] + 1);
+          for (let j = 0; j < n; j++) {
+            if (j === i) continue;
+            const nij = W[i][j] + W[j][i];
+            if (nij > 0) { wins += W[i][j]; den += nij / (p[i] + p[j]); }
+          }
+          next[i] = wins / den;
+        }
+        p = next;
+      }
+      se = p.map((pi, i) => {
+        let info = 2 * pi / ((pi + 1) ** 2);
+        for (let j = 0; j < n; j++) {
+          if (j === i) continue;
+          const nij = W[i][j] + W[j][i];
+          if (nij > 0) info += nij * pi * p[j] / ((pi + p[j]) ** 2);
+        }
+        return 1 / Math.sqrt(info);
+      });
+    }
+    return {
+      id: "bt", name: "Bradley–Terry", color: "#ea580c",
+      add() {
+        for (const row of W) row.push(0);
+        W.push(new Array(W.length + 1).fill(0));
+        p.push(1);
+        se.push(1 / Math.sqrt(0.5));
+      },
+      playDay(matches, day) {
+        if (halfLifeDays > 0) {
+          const fade = 0.5 ** ((day - lastDay) / halfLifeDays);
+          for (const row of W) for (let j = 0; j < row.length; j++) row[j] *= fade;
+        }
+        lastDay = day;
+        for (const m of matches) W[m.w][m.l] += 1;
+        fit();
+      },
+      mean: i => Math.log(p[i]),
+      cautious: i => Math.log(p[i]) - 2 * se[i],
+      display: i => `${Math.round(1500 + ELO_SCALE * Math.log(p[i]))} ± ${Math.round(2 * ELO_SCALE * se[i])}`,
+      pWin: (a, b) => p[a] / (p[a] + p[b]),
+    };
+  }
+
+  function makeWinRate() {
+    const wins = [], played = [];
+    const rate = i => (wins[i] + 1) / (played[i] + 2);
+    return {
+      id: "winrate", name: "Win %", color: "#d1d5db",
+      add() { wins.push(0); played.push(0); },
+      playDay(matches) {
+        for (const m of matches) { wins[m.w]++; played[m.w]++; played[m.l]++; }
+      },
+      mean: rate,
+      cautious: rate,
+      display: i => `${Math.round(100 * rate(i))}%`,
+      pWin: (a, b) => rate(a) / (rate(a) + rate(b)),
+    };
+  }
+
+  function makeAlgorithms(config) {
+    return [
+      makeGlicko2(),
+      makeTrueSkill(),
+      makeBradleyTerry({ halfLifeDays: config.halfLife }),
+      makeElo({ k: config.eloK }),
+      makeWinRate(),
+    ];
+  }
+
+  // ---------- Simulated world ----------
+  const NAMES = [
+    "Nino", "Pepperoni", "Sho", "Mushroom", "Jun", "Pineapple", "Aiba", "Olive", "Satoshi", "Basil",
+    "Ramen", "Sushi", "Taco", "Mango", "Matcha", "Kiwi", "Mochi", "Dumpling", "Udon", "Curry",
+    "Bagel", "Croissant", "Kimchi", "Paella", "Gelato", "Churro", "Falafel", "Pho", "Bao", "Tiramisu",
+    "Nacho", "Waffle", "Onigiri", "Brioche", "Pretzel", "Lychee", "Yuzu", "Tempura", "Gyoza", "Bibimbap",
+    "Pierogi", "Empanada", "Baklava", "Macaron", "Samosa", "Ceviche", "Risotto", "Shawarma",
+  ];
+  const nameFor = i => i < NAMES.length ? NAMES[i] : `Contestant ${i + 1}`;
+  const matchesOf = c => c.wins + c.losses;
+
+  function addContestant(world, { name, strength, tag } = {}) {
+    const index = world.contestants.length;
+    const gap = world.config.categoryGap;
+    const category = gap ? index % 2 : null;
+    world.contestants.push({
+      index,
+      name: name || nameFor(index),
+      category,
+      strength: strength ?? gaussian(world.rng) + (gap ? (category === 0 ? gap / 2 : -gap / 2) : 0),
+      wins: 0,
+      losses: 0,
+      tag: tag || null,
+    });
+    for (const algo of world.algos) algo.add();
+    return index;
+  }
+
+  function createWorld(config) {
+    const world = {
+      config,
+      rng: mulberry32(config.seed),
+      day: 0,
+      contestants: [],
+      algos: makeAlgorithms(config),
+      predictions: {},
+      history: [],
+      counts: { tournaments: 0, tournamentMatches: 0, infiniteMatches: 0 },
+    };
+    for (const algo of world.algos) world.predictions[algo.id] = { correct: 0, total: 0, lastCorrect: 0, lastTotal: 0 };
+    for (let i = 0; i < config.contestants; i++) addContestant(world);
+    return world;
+  }
+
+  function playMatch(world, a, b, source, matches) {
+    const A = world.contestants[a], B = world.contestants[b];
+    const aWins = world.rng() < logistic(world.config.consistency * (A.strength - B.strength));
+    const [w, l] = aWins ? [a, b] : [b, a];
+    world.contestants[w].wins++;
+    world.contestants[l].losses++;
+    matches.push({ w, l, source });
+    return { w, l };
+  }
+
+  // Random draw, random placement, single elimination with byes and a third-place match.
+  function runTournament(world, size, matches, pool) {
+    size = Math.max(2, Math.min(size, pool.length));
+    const picks = shuffle(pool.slice(), world.rng).slice(0, size);
+    let bracketSize = 1;
+    while (bracketSize < size) bracketSize *= 2;
+    const byes = bracketSize - size;
+    const firstRound = [];
+    let k = 0;
+    for (let b = 0; b < byes; b++) firstRound.push([picks[k++], null]);
+    while (k < size) firstRound.push([picks[k++], picks[k++]]);
+    shuffle(firstRound, world.rng);
+
+    let round = firstRound.flat();
+    let semifinalLosers = [];
+    while (round.length > 1) {
+      const next = [], losers = [];
+      for (let i = 0; i < round.length; i += 2) {
+        if (round[i + 1] === null) { next.push(round[i]); continue; }
+        const { w, l } = playMatch(world, round[i], round[i + 1], "tournament", matches);
+        next.push(w);
+        losers.push(l);
+      }
+      if (round.length === 4) semifinalLosers = losers;
+      round = next;
+    }
+    if (size >= 4 && semifinalLosers.length === 2) playMatch(world, semifinalLosers[0], semifinalLosers[1], "tournament", matches);
+    world.counts.tournaments++;
+  }
+
+  // Infinite Mode pairing: favor contestants with few matches and pairs with similar records, plus some randomness.
+  function pickInfinitePair(world, pool) {
+    const cs = pool.map(i => world.contestants[i]);
+    const rate = c => (c.wins + 1) / (matchesOf(c) + 2);
+    const fewMatchesBoost = c => 1 + 3 / (1 + matchesOf(c));
+    const a = weightedPick(cs.map(fewMatchesBoost), world.rng);
+    const ra = rate(cs[a]);
+    const b = weightedPick(cs.map((c, j) => j === a ? 0 :
+      fewMatchesBoost(c) * (Math.exp(-6 * Math.abs(rate(c) - ra)) + 0.1)), world.rng);
+    return [pool[a], pool[b]];
+  }
+
+  // With categories on, most play happens inside one category; crossShare of it uses all contestants.
+  function pickScope(world) {
+    const all = world.contestants.map((_, i) => i);
+    if (!world.config.categoryGap || world.rng() < world.config.crossShare) return all;
+    const category = world.rng() < 0.5 ? 0 : 1;
+    return all.filter(i => world.contestants[i].category === category);
+  }
+
+  function applyDrift(world) {
+    const drift = world.config.drift;
+    if (!drift) return;
+    for (const c of world.contestants) c.strength += gaussian(world.rng) * drift;
+  }
+
+  function finishDay(world, matches) {
+    for (const algo of world.algos) {
+      const p = world.predictions[algo.id];
+      let correct = 0;
+      for (const m of matches) {
+        const prob = algo.pWin(m.w, m.l);
+        correct += prob > 0.5 ? 1 : prob === 0.5 ? 0.5 : 0;
+      }
+      p.correct += correct;
+      p.total += matches.length;
+      p.lastCorrect = correct;
+      p.lastTotal = matches.length;
+    }
+    for (const algo of world.algos) algo.playDay(matches, world.day);
+    for (const m of matches) {
+      if (m.source === "tournament") world.counts.tournamentMatches++;
+      else world.counts.infiniteMatches++;
+    }
+    const truth = world.contestants.map(c => c.strength);
+    const entry = { day: world.day, mean: {}, cautious: {} };
+    for (const algo of world.algos) {
+      entry.mean[algo.id] = spearman(world.contestants.map((_, i) => algo.mean(i)), truth);
+      entry.cautious[algo.id] = spearman(world.contestants.map((_, i) => algo.cautious(i)), truth);
+    }
+    world.history.push(entry);
+  }
+
+  function playDay(world, plan = {}) {
+    const { tournaments, tournamentSize, infinite } = { ...world.config, ...plan };
+    world.day++;
+    applyDrift(world);
+    const matches = [];
+    for (let t = 0; t < tournaments; t++) runTournament(world, tournamentSize, matches, pickScope(world));
+    for (let m = 0; m < infinite; m++) {
+      const [a, b] = pickInfinitePair(world, pickScope(world));
+      playMatch(world, a, b, "infinite", matches);
+    }
+    finishDay(world, matches);
+    return matches;
+  }
+
+  function addStrongNewcomer(world) {
+    const best = Math.max(...world.contestants.map(c => c.strength));
+    return addContestant(world, { name: "Newcomer", strength: best + 0.3, tag: "Strong newcomer" });
+  }
+
+  function makeRising(world) {
+    const order = world.contestants.map((c, i) => i).sort((a, b) => world.contestants[b].strength - world.contestants[a].strength);
+    const pick = order[Math.floor(order.length / 2)];
+    const best = world.contestants[order[0]].strength;
+    world.contestants[pick].strength = best + 0.5;
+    world.contestants[pick].tag = "New favorite";
+    return pick;
+  }
+
+  // ---------- Measuring ----------
+  function averageRanks(values) {
+    const idx = values.map((_, i) => i).sort((a, b) => values[b] - values[a]);
+    const ranks = new Array(values.length);
+    let i = 0;
+    while (i < idx.length) {
+      let j = i;
+      while (j + 1 < idx.length && values[idx[j + 1]] === values[idx[i]]) j++;
+      for (let k = i; k <= j; k++) ranks[idx[k]] = (i + j) / 2 + 1;
+      i = j + 1;
+    }
+    return ranks;
+  }
+
+  function spearman(a, b) {
+    const ra = averageRanks(a), rb = averageRanks(b);
+    const mid = (a.length + 1) / 2;
+    let num = 0, da = 0, db = 0;
+    for (let i = 0; i < a.length; i++) {
+      const x = ra[i] - mid, y = rb[i] - mid;
+      num += x * y; da += x * x; db += y * y;
+    }
+    return da && db ? num / Math.sqrt(da * db) : 0;
+  }
+
+  function evaluate(world, mode) {
+    const cs = world.contestants;
+    const k = Math.min(10, cs.length);
+    const truth = cs.map(c => c.strength);
+    const trueRank = averageRanks(truth);
+    const trueTop = new Set(cs.map((_, i) => i).filter(i => trueRank[i] <= k));
+    const results = world.algos.map(algo => {
+      const scores = cs.map((_, i) => mode === "cautious" ? algo.cautious(i) : algo.mean(i));
+      const order = cs.map((_, i) => i).sort((x, y) => scores[y] - scores[x]);
+      const top = order.slice(0, k);
+      const p = world.predictions[algo.id];
+      return {
+        id: algo.id,
+        name: algo.name,
+        color: algo.color,
+        accuracy: world.day ? spearman(scores, truth) : null,
+        topRight: top.filter(i => trueTop.has(i)).length,
+        unprovenInTop: top.filter(i => matchesOf(cs[i]) < 5).length,
+        k,
+        predictedAll: p.total ? p.correct / p.total : null,
+        predictedLast: p.lastTotal ? p.lastCorrect / p.lastTotal : null,
+        ranks: averageRanks(scores),
+        display: cs.map((_, i) => algo.display(i)),
+      };
+    });
+    return { trueRank, results };
+  }
+
+  return { createWorld, playDay, addStrongNewcomer, makeRising, evaluate };
+})();
+</script>
+
+<script>
+// Page shell: reads the logic above, renders it, wires buttons. Throwaway.
+const DEFAULTS = {
+  contestants: 64, tournaments: 4, tournamentSize: 8, infinite: 40,
+  consistency: 1, drift: 0.01, categoryGap: 0, crossShare: 0.1,
+  halfLife: 60, eloK: 24, seed: 7,
+};
+
+const SCENARIOS = [
+  {
+    title: "Normal growth",
+    config: {},
+    description: "64 contestants and a quiet early site. Each day, players run 4 random 8-contestant tournaments and 40 Infinite Mode matches, so each contestant plays about two matches a day.",
+    watch: "After day 1, everyone is guessing. Watch which algorithms close in on the true order fastest, and how far behind Win % stays because it ignores who you beat.",
+    steps: [
+      ["Play day 1", w => RankingLab.playDay(w), "Day 1 played."],
+      ["Play days 2–7", w => playDays(w, 6), "A week in."],
+      ["Play days 8–30", w => playDays(w, 23), "A month in."],
+    ],
+  },
+  {
+    title: "Tournaments only",
+    config: { infinite: 0, tournaments: 6 },
+    description: "No Infinite Mode, just 6 random 8-contestant tournaments a day. In single elimination, half the field plays once and goes home, while winners play up to 3 matches.",
+    watch: "First-round losers have records like 0–1 even when they're good, because they drew a strong opponent. Algorithms that use strength of opponents should rank them more fairly than Win %.",
+    steps: [
+      ["Play 7 days", w => playDays(w, 7), "A week of tournaments only."],
+      ["Play 23 more days", w => playDays(w, 23), "A month of tournaments only."],
+    ],
+  },
+  {
+    title: "Strong vs. weak categories",
+    config: { categoryGap: 2, crossShare: 0.1 },
+    description: "This tests the overall ranking. Contestants are split into a strong category and a weak category, and 90% of play happens inside one category. Only 10% of tournaments and Infinite Mode matches mix both, the way the overall ranking will mostly be built from category play.",
+    watch: "The weak category's best contestants win most of their matches against weak opponents, so their records look great. Only the few cross-category matches reveal they're worse than the strong category's middle. Which algorithms see through the records?",
+    steps: [
+      ["Play 14 days", w => playDays(w, 14), "Two weeks of mostly in-category play."],
+      ["Play 16 more days", w => playDays(w, 16), "A month of mostly in-category play."],
+      ["Play 30 more days", w => playDays(w, 30), "Two months of mostly in-category play."],
+    ],
+  },
+  {
+    title: "Strong newcomer",
+    config: {},
+    description: "After a month of normal play, a brand-new contestant joins who is secretly stronger than everyone.",
+    watch: "The highlighted Newcomer row. How quickly does each algorithm move it up? Does anything put it at #1 after a lucky couple of wins, before it has proven itself? Try the Cautious toggle.",
+    steps: [
+      ["Play 30 days to settle", w => playDays(w, 30), "A month of normal play."],
+      ["A strong newcomer joins", w => RankingLab.addStrongNewcomer(w), "The Newcomer joined with 0 matches. In truth, they're the strongest contestant."],
+      ["Play 1 day", w => RankingLab.playDay(w), "The Newcomer's first day."],
+      ["Play 2 more days", w => playDays(w, 2), "Three days since the Newcomer joined."],
+      ["Play 4 more days", w => playDays(w, 4), "A week since the Newcomer joined."],
+    ],
+  },
+  {
+    title: "Tastes change",
+    config: { drift: 0 },
+    description: "After a month, a contestant from the middle of the table suddenly becomes everyone's favorite, the way a song goes viral.",
+    watch: "The highlighted row. Algorithms where recent results count more should follow quickly. Bradley–Terry follows at the speed of its half-life (60 days by default; try 14 or 0 in Settings).",
+    steps: [
+      ["Play 30 days to settle", w => playDays(w, 30), "A month of normal play with steady tastes."],
+      ["A mid-table contestant becomes everyone's favorite", w => RankingLab.makeRising(w), "Tastes just changed: the highlighted contestant is now, in truth, the strongest."],
+      ["Play 7 days", w => playDays(w, 7), "A week after tastes changed."],
+      ["Play 14 more days", w => playDays(w, 14), "Three weeks after tastes changed."],
+    ],
+  },
+  {
+    title: "One giant tournament",
+    config: { contestants: 128, tournaments: 0, infinite: 200 },
+    description: "128 contestants and no size limit on tournaments. What does one tournament with all of them teach the rankings?",
+    watch: "A 128-contestant bracket is 128 matches, but 64 contestants play exactly once. Look at the bottom half's ± ranges and how scattered their ranks are. Then compare with a week of Infinite Mode, which spreads matches evenly.",
+    steps: [
+      ["Run one 128-contestant tournament", w => RankingLab.playDay(w, { tournaments: 1, tournamentSize: Infinity, infinite: 0 }), "One giant tournament played (128 matches)."],
+      ["Run 3 more giant tournaments", w => playDays(w, 3, { tournaments: 1, tournamentSize: Infinity, infinite: 0 }), "Four giant tournaments played."],
+      ["Play 7 days of Infinite Mode", w => playDays(w, 7), "Plus a week of Infinite Mode (200 matches a day)."],
+    ],
+  },
+];
+
+let world;
+let mode = "mean";
+let note = "";
+let scenarioIndex = 0;
+let stepIndex = -1;
+
+function playDays(w, n, plan) {
+  for (let i = 0; i < n; i++) RankingLab.playDay(w, plan);
+}
+
+function readConfig() {
+  const cfg = {};
+  for (const key of Object.keys(DEFAULTS)) cfg[key] = Number(document.getElementById(`cfg-${key}`).value);
+  return cfg;
+}
+function writeConfig(cfg) {
+  for (const [key, value] of Object.entries(cfg)) document.getElementById(`cfg-${key}`).value = value;
+}
+
+function startOver(cfg, message) {
+  writeConfig(cfg);
+  world = RankingLab.createWorld(cfg);
+  note = message || `Fresh start: ${cfg.contestants} contestants, no matches yet.`;
+  render();
+}
+
+function act(fn, message) {
+  fn(world);
+  note = message;
+  render();
+}
+
+const fmtPct = v => v === null ? "–" : `${Math.round(v * 100)}%`;
+const fmtAcc = v => v === null ? "–" : `${Math.round(v * 100)}`;
+
+function renderStats() {
+  const c = world.counts;
+  const items = [
+    ["Day", world.day],
+    ["Contestants", world.contestants.length],
+    ["Tournaments run", c.tournaments],
+    ["Tournament matches", c.tournamentMatches],
+    ["Infinite Mode matches", c.infiniteMatches],
+  ];
+  document.getElementById("stats").innerHTML = items.map(([label, value]) =>
+    `<div class="stat"><div class="value">${value.toLocaleString()}</div><div class="label">${label}</div></div>`).join("");
+  document.getElementById("note").textContent = note;
+}
+
+function renderScoreboard(evaluation) {
+  const rows = evaluation.results.map(r => `
+    <tr>
+      <td><span style="color:${r.color}">■</span> ${r.name}</td>
+      <td class="num">${fmtAcc(r.accuracy)}</td>
+      <td class="num">${world.day ? `${r.topRight} / ${r.k}` : "–"}</td>
+      <td class="num">${world.day ? r.unprovenInTop : "–"}</td>
+      <td class="num">${fmtPct(r.predictedAll)}</td>
+      <td class="num">${fmtPct(r.predictedLast)}</td>
+    </tr>`).join("");
+  document.getElementById("scoreboard").innerHTML = `
+    <table>
+      <thead><tr>
+        <th>Algorithm</th><th class="num">Ranking accuracy</th><th class="num">Top 10 right</th>
+        <th class="num">Unproven in top 10</th><th class="num">Predicted matches right</th><th class="num">…on the latest day</th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+  document.getElementById("mode-explainer").textContent = mode === "mean"
+    ? "Best guess ranks each contestant by its most likely rating."
+    : "Cautious ranks each contestant by the low end of its confidence range, so contestants with few matches have to prove themselves first. Elo and Win % have no confidence range, so they don't change.";
+  for (const b of document.querySelectorAll("#mode-toggle button")) b.classList.toggle("active", b.dataset.mode === mode);
+}
+
+function renderChart() {
+  const history = world.history;
+  const el = document.getElementById("chart");
+  document.getElementById("chart-legend").innerHTML = world.algos.map(a => `<span style="--c:${a.color}">${a.name}</span>`).join("");
+  if (!history.length) {
+    el.innerHTML = '<p class="muted">Play some days to see this.</p>';
+    return;
+  }
+  const W = 720, H = 220, left = 34, right = 12, top = 10, bottom = 26;
+  const firstDay = history[0].day, lastDay = Math.max(history[history.length - 1].day, firstDay + 1);
+  const x = d => left + (d - firstDay) / (lastDay - firstDay) * (W - left - right);
+  const y = v => top + (1 - Math.max(0, Math.min(1, v))) * (H - top - bottom);
+  let svg = `<svg viewBox="0 0 ${W} ${H}" width="100%" style="max-height:260px">`;
+  for (const v of [0, 0.25, 0.5, 0.75, 1]) {
+    svg += `<line x1="${left}" x2="${W - right}" y1="${y(v)}" y2="${y(v)}" stroke="#e5e7eb"/>`;
+    svg += `<text x="${left - 6}" y="${y(v) + 4}" font-size="10" text-anchor="end" fill="#6b7280">${v * 100}</text>`;
+  }
+  svg += `<text x="${left}" y="${H - 6}" font-size="10" fill="#6b7280">Day ${firstDay}</text>`;
+  svg += `<text x="${W - right}" y="${H - 6}" font-size="10" text-anchor="end" fill="#6b7280">Day ${history[history.length - 1].day}</text>`;
+  for (const algo of world.algos) {
+    const pts = history.map(h => `${x(h.day).toFixed(1)},${y(h[mode][algo.id]).toFixed(1)}`);
+    svg += `<polyline fill="none" stroke="${algo.color}" stroke-width="${algo.id === "winrate" ? 2 : 2.2}" ${algo.id === "winrate" ? 'stroke-dasharray="5 4"' : ""} points="${pts.join(" ")}"/>`;
+    const last = history[history.length - 1];
+    svg += `<circle cx="${x(last.day)}" cy="${y(last[mode][algo.id])}" r="3" fill="${algo.color}"/>`;
+  }
+  svg += "</svg>";
+  el.innerHTML = svg;
+}
+
+function renderContestants(evaluation) {
+  const cs = world.contestants;
+  const order = cs.map((_, i) => i).sort((a, b) => evaluation.trueRank[a] - evaluation.trueRank[b]);
+  const head = `<tr><th class="num">True rank</th><th>Contestant</th><th>Record</th>${evaluation.results.map(r => `<th>${r.name}</th>`).join("")}</tr>`;
+  const body = order.map(i => {
+    const c = cs[i];
+    const truth = evaluation.trueRank[i];
+    const cells = evaluation.results.map(r => {
+      const rank = r.ranks[i];
+      const off = Math.abs(rank - truth);
+      const cls = !world.day ? "" : off <= 2 ? "good" : off <= 5 ? "ok" : "bad";
+      return `<td class="${cls}"><span class="rank">#${Number.isInteger(rank) ? rank : rank.toFixed(1)}</span><span class="rating">${r.display[i]}</span></td>`;
+    }).join("");
+    const category = c.category === null ? "" : `<span class="rating">${c.category === 0 ? "Strong category" : "Weak category"}</span>`;
+    return `<tr class="${c.tag ? "highlight" : ""}"><td class="num">${truth}</td><td>${c.name}${c.tag ? `<span class="badge">${c.tag}</span>` : ""}${category}</td><td>${c.wins}–${c.losses}</td>${cells}</tr>`;
+  }).join("");
+  document.getElementById("contestants").innerHTML = `<table><thead>${head}</thead><tbody>${body}</tbody></table>`;
+}
+
+function renderScenarios() {
+  document.getElementById("scenario-tabs").innerHTML = SCENARIOS.map((s, i) =>
+    `<button data-scenario="${i}" class="${i === scenarioIndex ? "active" : ""}">${s.title}</button>`).join("");
+  const s = SCENARIOS[scenarioIndex];
+  const steps = [["Start fresh with this setup", null], ...s.steps];
+  document.getElementById("scenario-body").innerHTML = `
+    <p style="margin:0 0 6px">${s.description}</p>
+    <p class="small muted" style="margin:0"><strong>What to watch for:</strong> ${s.watch}</p>
+    <div class="steps">${steps.map(([label], i) => {
+      const state = i <= stepIndex ? "done" : i === stepIndex + 1 ? "next" : "";
+      return `<button data-step="${i}" class="${state}" ${i === stepIndex + 1 ? "" : "disabled"}>${i}. ${label}</button>`;
+    }).join("")}</div>`;
+}
+
+function render() {
+  const evaluation = RankingLab.evaluate(world, mode);
+  renderStats();
+  renderScoreboard(evaluation);
+  renderChart();
+  renderContestants(evaluation);
+  renderScenarios();
+}
+
+document.addEventListener("click", e => {
+  const button = e.target.closest("button");
+  if (!button || button.disabled) return;
+  const { action, mode: newMode, scenario, step } = button.dataset;
+  if (action) {
+    stepIndex = -1;
+    const actions = {
+      day1: [w => RankingLab.playDay(w), "Played 1 day."],
+      day7: [w => playDays(w, 7), "Played 7 days."],
+      day30: [w => playDays(w, 30), "Played 30 days."],
+      giant: [w => RankingLab.playDay(w, { tournaments: 1, tournamentSize: Infinity, infinite: 0 }), "Played one tournament with every contestant, and nothing else that day."],
+      newcomer: [w => RankingLab.addStrongNewcomer(w), "A Newcomer joined with 0 matches. In truth, they're the strongest contestant."],
+      rising: [w => RankingLab.makeRising(w), "Tastes just changed: the highlighted contestant is now, in truth, the strongest."],
+    };
+    act(...actions[action]);
+  } else if (newMode) {
+    mode = newMode;
+    render();
+  } else if (scenario !== undefined) {
+    scenarioIndex = Number(scenario);
+    stepIndex = -1;
+    renderScenarios();
+  } else if (step !== undefined) {
+    const i = Number(step);
+    const s = SCENARIOS[scenarioIndex];
+    stepIndex = i;
+    if (i === 0) startOver({ ...DEFAULTS, ...s.config }, `Scenario "${s.title}": fresh start, no matches yet.`);
+    else {
+      const [, fn, message] = s.steps[i - 1];
+      act(fn, message);
+    }
+  } else if (button.id === "apply-settings") {
+    stepIndex = -1;
+    startOver(readConfig());
+  }
+});
+
+startOver(DEFAULTS);
+</script>
+</body>
+</html>
