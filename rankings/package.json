@@ -12,7 +12,7 @@
     "test:e2e": "playwright test",
     "db:start": "supabase start && node scripts/write-local-env.mjs",
     "db:reset": "supabase db reset",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "next typegen && tsc --noEmit"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.7",

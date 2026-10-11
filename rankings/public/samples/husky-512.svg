@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+<rect width="512" height="512" fill="hsl(292 70% 55%)"/>
+<circle cx="256" cy="220" r="130" fill="hsl(332 80% 85%)"/>
+<text x="256" y="268" font-family="system-ui, sans-serif" font-size="130" font-weight="700" text-anchor="middle" fill="hsl(292 60% 25%)">H</text>
+<text x="256" y="440" font-family="system-ui, sans-serif" font-size="48" font-weight="600" text-anchor="middle" fill="white">Husky</text>
+</svg>
