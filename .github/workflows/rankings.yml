@@ -1,0 +1,31 @@
+name: rankings
+
+on:
+  push:
+    paths: ["rankings/**", ".github/workflows/rankings.yml"]
+  pull_request:
+    paths: ["rankings/**", ".github/workflows/rankings.yml"]
+
+defaults:
+  run:
+    working-directory: rankings
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: rankings/package-lock.json
+      - run: npm ci
+      - run: npx supabase start -x studio,imgproxy,edge-runtime,logflare,vector,supavisor,mailpit
+      - run: node scripts/write-local-env.mjs
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm test
+      - run: npm run test:service
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:e2e

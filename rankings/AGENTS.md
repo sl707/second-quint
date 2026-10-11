@@ -1,0 +1,35 @@
+<!-- BEGIN:nextjs-agent-rules -->
+
+## This is NOT the Next.js you know
+
+This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` (resolved from this file's directory; in monorepos the `next` package may not be visible from the repo root) before writing any code. Heed deprecation notices.
+
+This block is written and re-added by `next dev` — verify at `node_modules/next/dist/server/lib/generate-agent-files.js`. Removing it from a diff only re-creates the uncommitted change; committing it with your work keeps the tree clean.
+
+<!-- END:nextjs-agent-rules -->
+
+## Second Quint Rankings app
+
+Spec: `../.scratch/rankings/spec.md`. Tickets: `../.scratch/rankings/issues/`. Vocabulary: `../GLOSSARY.md`.
+
+### Running
+
+- `npm run db:start`: start local Supabase (Docker) and write `.env.local`
+- `npm run dev`: app at http://127.0.0.1:3000
+- `npm run db:reset`: re-apply all migrations from scratch
+- New schema: `npx supabase migration new <name>`, then edit the file in `supabase/migrations/`
+
+### Layout
+
+- `src/domain/`: pure rules and calculations, no I/O (bracket building, ranking calculation, allowance math)
+- `src/server/`: the game, catalog, and admin services; take a `SupabaseClient` as their first argument
+- `src/app/`: pages, route handlers, and server actions; thin wrappers over `src/server/`
+- `src/lib/supabase/`: `createVisitorClient()` (acts as the visitor, respects row-level security) and `createAdminClient()` (server-only, full access)
+
+`cacheComponents` is off: pages render dynamically.
+
+### Test seams
+
+- **Unit** (`npm test`): `src/**/*.test.ts`, pure domain code, including the ranking calculation
+- **Service** (`npm run test:service`): `tests/service/**/*.test.ts`, calls `src/server/` against the local Supabase; files run one at a time
+- **Browser** (`npm run test:e2e`): `e2e/*.spec.ts`, Playwright at a phone viewport against a production build; keep these few and about wiring, not rules
