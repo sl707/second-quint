@@ -17,14 +17,13 @@ export function DisplayNameForm({ next }: { next: string }) {
           required
           minLength={MIN_DISPLAY_NAME_LENGTH}
           maxLength={MAX_DISPLAY_NAME_LENGTH}
-          pattern="[A-Za-z0-9_\-]+"
           autoComplete="off"
           autoCapitalize="none"
           spellCheck={false}
           className="rounded-xl border border-zinc-300 bg-white px-4 py-3 text-lg"
         />
         <span className="text-sm text-zinc-500">
-          {MIN_DISPLAY_NAME_LENGTH} to {MAX_DISPLAY_NAME_LENGTH} letters, digits, underscores, or hyphens. Shown on your
+          {MIN_DISPLAY_NAME_LENGTH} to {MAX_DISPLAY_NAME_LENGTH} letters, digits, spaces, underscores, or hyphens. Shown on your
           profile instead of your real name. You can&apos;t change it later.
         </span>
       </label>

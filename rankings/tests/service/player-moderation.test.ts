@@ -61,7 +61,7 @@ describe("the admin renaming a player", () => {
     await expect(renamePlayer(db, admin, player.playerId, other.displayName.toUpperCase())).rejects.toThrow("taken");
     await expect(renamePlayer(db, admin, player.playerId, "ab")).rejects.toThrow(AdminError);
     await expect(renamePlayer(db, admin, player.playerId, "x".repeat(25))).rejects.toThrow(AdminError);
-    await expect(renamePlayer(db, admin, player.playerId, "has space")).rejects.toThrow(AdminError);
+    await expect(renamePlayer(db, admin, player.playerId, "has@symbol")).rejects.toThrow(AdminError);
     await expect(renamePlayer(db, other, player.playerId, uniqueDisplayName())).rejects.toThrow(AdminError);
     await expect(renamePlayer(db, admin, "not-an-id", uniqueDisplayName())).rejects.toThrow(AdminError);
     expect((await getProfile(db, player.playerId))?.displayName).toBe(player.displayName);

@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
+import { checkDisplayName } from "@/domain/profile/display-name";
 import { safeNextPath } from "@/lib/pathname";
 import { getSession } from "@/lib/session";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -32,7 +33,8 @@ export async function deleteAccountAction(_: DeleteAccountState, form: FormData)
   const session = await getSession();
   if (session.status !== "player") redirect("/");
   const { player } = session;
-  if (String(form.get("confirm") ?? "").trim().toLowerCase() !== player.displayName.toLowerCase()) {
+  const typed = checkDisplayName(String(form.get("confirm") ?? ""));
+  if (!typed.ok || typed.displayName.toLowerCase() !== player.displayName.toLowerCase()) {
     return { error: `Type ${player.displayName} to confirm.` };
   }
 

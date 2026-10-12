@@ -92,8 +92,9 @@ export async function searchPlayers(db: SupabaseClient, query: string): Promise<
 export async function getProfile(db: SupabaseClient, idOrDisplayName: string): Promise<Player | null> {
   // The deleted-player tombstone has no display name and no profile.
   const query = db.from("players").select(PUBLIC_COLUMNS).not("display_name", "is", null);
-  const filtered = UUID.test(idOrDisplayName)
-    ? query.eq("id", idOrDisplayName)
-    : query.eq("display_name_key", idOrDisplayName.toLowerCase());
-  return check(await filtered.maybeSingle()) as Player | null;
+  if (UUID.test(idOrDisplayName)) return check(await query.eq("id", idOrDisplayName).maybeSingle()) as Player | null;
+  const checked = checkDisplayName(idOrDisplayName);
+  if (!checked.ok) return null;
+  // ILIKE lowercases both sides with the database's lower(), the same rule that keeps names unique.
+  return check(await query.ilike("display_name", checked.displayName.replaceAll("_", "\\_")).maybeSingle()) as Player | null;
 }

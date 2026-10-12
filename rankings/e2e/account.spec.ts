@@ -39,7 +39,7 @@ test("a new player picks a display name, sees their profile, plays signed in, an
   await page.getByRole("button", { name: "Continue" }).click();
   await expect(page.getByRole("alert").filter({ hasText: /\S/ })).toHaveText("That display name is taken.");
 
-  const displayName = `Player_${randomUUID().slice(0, 8)}`;
+  const displayName = `Zoë Fan ${randomUUID().slice(0, 8)}`;
   await page.getByLabel("Display name").fill(displayName);
   await page.getByRole("button", { name: "Continue" }).click();
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("Second Quint Rankings");
@@ -89,7 +89,7 @@ test("a new player picks a display name, sees their profile, plays signed in, an
 test("anyone can see a player's personal rankings and past tournaments on their profile", async ({ page, context, baseURL }) => {
   const user = await signInAsNewUser(context, baseURL!);
   users.push(user.userId);
-  const displayName = `Player_${randomUUID().slice(0, 8)}`;
+  const displayName = `Zoë Fan ${randomUUID().slice(0, 8)}`;
   await admin.from("players").insert({ user_id: user.userId, display_name: displayName });
 
   await page.goto("/tournaments/new");
@@ -151,7 +151,7 @@ test("a signed-out visitor searches for a player and opens their profile", async
 test("a player is reminded of an unfinished rated tournament, resumes it, and gives it up", async ({ page, context, baseURL }) => {
   const user = await signInAsNewUser(context, baseURL!);
   users.push(user.userId);
-  const displayName = `Player_${randomUUID().slice(0, 8)}`;
+  const displayName = `Zoë Fan ${randomUUID().slice(0, 8)}`;
   await admin.from("players").insert({ user_id: user.userId, display_name: displayName });
 
   await page.goto("/tournaments/new");

@@ -16,7 +16,18 @@ import { UnfinishedTournaments } from "../../unfinished-tournaments";
 import { DeleteAccount } from "./delete-account";
 import { PlayerModeration } from "./player-moderation";
 
-const loadProfile = cache((name: string) => getProfile(createAdminClient(), decodeURIComponent(name)));
+function decodeName(name: string): string | null {
+  try {
+    return decodeURIComponent(name);
+  } catch {
+    return null;
+  }
+}
+
+const loadProfile = cache(async (name: string) => {
+  const decoded = decodeName(name);
+  return decoded === null ? null : getProfile(createAdminClient(), decoded);
+});
 
 export async function generateMetadata({ params }: PageProps<"/players/[name]">): Promise<Metadata> {
   const player = await loadProfile((await params).name);

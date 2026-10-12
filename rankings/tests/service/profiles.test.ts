@@ -62,6 +62,23 @@ describe("choosing a display name", () => {
     );
   });
 
+  it("accepts letters from any script and spaces, normalized, and keeps them unique ignoring case", async () => {
+    const name = `Zoë Ελένη ${randomUUID().slice(0, 6)}`;
+    const player = await chooseDisplayName(db, (await newUser(db)).userId, `  ${name.replaceAll(" ", "   ")} `);
+
+    expect(player.displayName).toBe(name);
+    await expect(chooseDisplayName(db, (await newUser(db)).userId, name.toUpperCase())).rejects.toThrow(
+      new ProfileError("That display name is taken."),
+    );
+  });
+
+  it("refuses symbols and untidy spaces in the database too", async () => {
+    const { userId } = await newUser(db);
+    for (const name of ["two  spaces", " leading", "trailing ", "at@sign"]) {
+      expect((await db.from("players").insert({ user_id: userId, display_name: name })).error?.code).toBe("23514");
+    }
+  });
+
   it("is chosen once; a player can't pick another", async () => {
     const { userId } = await newUser(db);
     await chooseDisplayName(db, userId, uniqueDisplayName());
@@ -77,6 +94,14 @@ describe("profiles", () => {
     expect(await getProfile(db, player.displayName.toLowerCase())).toEqual(player);
     expect(await getProfile(db, player.id)).toEqual(player);
     expect(await getProfile(db, "nobody_here")).toBeNull();
+  });
+
+  it("finds a profile by a display name with spaces and letters from any script, in any case", async () => {
+    const player = await chooseDisplayName(db, (await newUser(db)).userId, `Ödön Σοφία ${randomUUID().slice(0, 6)}`);
+
+    expect(await getProfile(db, player.displayName.toUpperCase())).toEqual(player);
+    expect(await getProfile(db, player.displayName.toLowerCase())).toEqual(player);
+    expect(await getProfile(db, player.displayName.replace(" ", "_"))).toBeNull();
   });
 
   it("never carries the player's real name or email", async () => {
