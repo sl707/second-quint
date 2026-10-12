@@ -44,6 +44,10 @@ Spec: `../.scratch/rankings/spec.md`. Tickets: `../.scratch/rankings/issues/`. V
 
 The ranking refresher (`refreshGlobalRankings` in `src/server/rankings.ts`) recomputes every global ranking with the pure calculation in `src/domain/ranking/` and stores one ready-made list per scope and version (`ranking_lists.rated`: rated lists use only rated matches, unrated lists every match; `ranking_entries`); ranking pages only read those rows, showing the rated version unless the URL has `?version=unrated`. The default category cover is the top of the category's rated list. Service tests call `refreshGlobalRankings` directly instead of waiting for the schedule.
 
+### Contestant page
+
+`/contestants/[id]` (`?version=unrated`) reads `getContestantStanding` (`src/server/rankings.ts`): the contestant's entry in the latest stored Overall and Category Rankings of that version (null = not yet judged), its live record and most frequent opponents from the `contestant_head_to_head` SQL function, and each scope's weekly rating history. The first refresh of each New York week (Monday to Sunday, `snapshotWeek` in `src/domain/ranking/`) stores one `rating_snapshots` row per scope with judged contestants, from the rated lists only, with an entry per judged contestant (`store_rating_snapshot` skips a scope that already has the week's snapshot). Snapshots are never pruned; the chart (`rating-chart.tsx`) is an inline SVG.
+
 ### Personal rankings and profiles
 
 `getPersonalRanking` (`src/server/rankings.ts`) computes a player's personal ranking on every request from only their own non-excluded matches, with no fading (`halfLifeDays: null`); nothing is stored and the refresher isn't involved. `listPersonalRankingScopes` lists Overall plus the categories they've played. The profile (`/players/[name]`, `?scope=<category ID>`, `?version=unrated`) shows these and `listPastTournaments` (`src/server/game.ts`, latest 50) to anyone through the visitor client.

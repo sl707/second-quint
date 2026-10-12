@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { calculateRanking, type RankingMatch } from "@/domain/ranking/ranking";
+import { snapshotWeek } from "@/domain/ranking/snapshot-week";
 import type { ContestantCard, ScopeId } from "@/server/game";
 
 /** Global rankings fade matches with a 30-day half-life, so they follow changing tastes. */
@@ -74,11 +75,13 @@ async function readCountedMatches(db: SupabaseClient): Promise<MatchRow[]> {
  * version) from all counted matches and stores the ready-made lists. A category's matches feed
  * its own ranking and the overall ranking; matches drawn from all contestants feed only the
  * overall ranking. Rated rankings use only rated matches; unrated rankings use every match.
+ * The first refresh of each New York week also snapshots every rated list that has judged
+ * contestants, for the contestant page's rating-over-time chart.
  */
 export async function refreshGlobalRankings(
   db: SupabaseClient,
   { now = new Date() }: { now?: Date } = {},
-): Promise<{ lists: number; matches: number }> {
+): Promise<{ lists: number; matches: number; snapshots: number }> {
   const [matchRows, contestants, memberships, categories] = await Promise.all([
     readCountedMatches(db),
     readAll<{ id: string }>((from, to) =>
@@ -105,7 +108,17 @@ export async function refreshGlobalRankings(
     })),
   ];
 
+  const week = snapshotWeek(now);
+  const snapshotted = new Set(
+    (
+      await readAll<{ category_id: string | null }>((from, to) =>
+        db.from("rating_snapshots").select("category_id").eq("week", week).order("id").range(from, to),
+      )
+    ).map((s) => s.category_id),
+  );
+
   let lists = 0;
+  let snapshots = 0;
   for (const rated of [true, false]) {
     const { all, byCategory } = groupByScope(rated ? matchRows.filter((m) => m.rated) : matchRows);
     for (const scope of scopes) {
@@ -113,10 +126,31 @@ export async function refreshGlobalRankings(
       const ranking = calculateRanking(matches, { contestantIds: scope.contestantIds, halfLifeDays: GLOBAL_HALF_LIFE_DAYS, now });
       await storeList(db, scope.categoryId, rated, now, ranking);
       lists++;
+      if (rated && ranking.ranked.length > 0 && !snapshotted.has(scope.categoryId)) {
+        if (await storeSnapshot(db, scope.categoryId, week, now, ranking)) snapshots++;
+      }
     }
   }
 
-  return { lists, matches: matchRows.length };
+  return { lists, matches: matchRows.length, snapshots };
+}
+
+/** Stores the scope's weekly rating snapshot unless another refresh already took this week's. */
+async function storeSnapshot(
+  db: SupabaseClient,
+  categoryId: ScopeId,
+  week: string,
+  now: Date,
+  ranking: ReturnType<typeof calculateRanking>,
+): Promise<boolean> {
+  return check(
+    await db.rpc("store_rating_snapshot", {
+      p_category_id: categoryId,
+      p_week: week,
+      p_taken_at: now.toISOString(),
+      p_entries: ranking.ranked.map((r) => ({ contestant_id: r.contestantId, rating: r.rating, range: r.range })),
+    }),
+  ) as boolean;
 }
 
 function groupByScope(rows: MatchRow[]) {
@@ -267,6 +301,140 @@ export async function getPersonalRanking(
     })),
     notYetJudged: ranking.notYetJudged.map((id) => cards.get(id)!),
   };
+}
+
+export type ContestantScopeStanding = {
+  categoryId: ScopeId;
+  scopeName: string;
+  /** null until the ranking refresher has run since the contestant or scope was added */
+  refreshedAt: string | null;
+  /** null while the contestant is not yet judged in this scope */
+  standing: Omit<RankingRow, "contestant"> | null;
+  /** Weekly snapshots of its global rated rating here, oldest first, whichever version is shown */
+  history: RatingSnapshot[];
+};
+
+/** `week` is the `YYYY-MM-DD` of the New York week's Monday. */
+export type RatingSnapshot = { week: string; rating: number; range: number };
+
+export type HeadToHead = { opponent: ContestantCard; wins: number; losses: number; matches: number };
+
+export type ContestantStanding = {
+  /** The Overall Ranking first, then each of the contestant's categories by name */
+  scopes: ContestantScopeStanding[];
+  /** Every counted match it played (only rated ones in the rated version), unfaded and current */
+  record: { wins: number; losses: number; matches: number };
+  /** Its most frequent opponents, most matches first */
+  headToHead: HeadToHead[];
+};
+
+/** How many opponents the contestant page shows head-to-head records against. */
+export const HEAD_TO_HEAD_SHOWN = 5;
+
+/**
+ * How a contestant is doing in the latest stored global rankings, rated or unrated: its place in
+ * the Overall Ranking and in each of its categories. Null if the contestant doesn't exist.
+ */
+export async function getContestantStanding(
+  db: SupabaseClient,
+  contestantId: string,
+  { rated }: { rated: boolean },
+): Promise<ContestantStanding | null> {
+  const [contestant, memberships, opponents, snapshotRows] = await Promise.all([
+    db.from("contestants").select("id").eq("id", contestantId).maybeSingle(),
+    db.from("category_memberships").select("categories!inner(id, name)").eq("contestant_id", contestantId),
+    db.rpc("contestant_head_to_head", { p_contestant_id: contestantId, p_rated: rated }),
+    readAll<{ rating: number; range: number; rating_snapshots: { category_id: string | null; week: string } }>((from, to) =>
+      db
+        .from("rating_snapshot_entries")
+        .select("rating, range, rating_snapshots!inner(category_id, week)")
+        .eq("contestant_id", contestantId)
+        .order("snapshot_id")
+        .range(from, to),
+    ),
+  ]);
+  if (!check(contestant)) return null;
+  const history = new Map<string | null, RatingSnapshot[]>();
+  for (const s of snapshotRows) {
+    const points = history.get(s.rating_snapshots.category_id) ?? [];
+    points.push({ week: s.rating_snapshots.week, rating: s.rating, range: s.range });
+    history.set(s.rating_snapshots.category_id, points);
+  }
+  for (const points of history.values()) points.sort((x, y) => x.week.localeCompare(y.week));
+  const categories = (check(memberships) as unknown as { categories: { id: string; name: string } }[])
+    .map((m) => m.categories)
+    .sort((a, b) => a.name.localeCompare(b.name) || a.id.localeCompare(b.id));
+  const categoryIds = categories.map((c) => c.id);
+
+  let listQuery = db.from("ranking_lists").select("id, category_id, refreshed_at").eq("rated", rated);
+  listQuery = categoryIds.length
+    ? listQuery.or(`category_id.is.null,category_id.in.(${categoryIds.join(",")})`)
+    : listQuery.is("category_id", null);
+  const lists = check(await listQuery.order("refreshed_at", { ascending: false }).order("id", { ascending: false })) as {
+    id: number;
+    category_id: string | null;
+    refreshed_at: string;
+  }[];
+  const latestList = new Map<string | null, (typeof lists)[number]>();
+  for (const list of lists) if (!latestList.has(list.category_id)) latestList.set(list.category_id, list);
+
+  const listIds = [...latestList.values()].map((l) => l.id);
+  const entries = listIds.length
+    ? (check(
+        await db
+          .from("ranking_entries")
+          .select("list_id, position, judged, rating, range, score, wins, losses, matches")
+          .eq("contestant_id", contestantId)
+          .in("list_id", listIds),
+      ) as (Omit<EntryRow, "contestants"> & { list_id: number })[])
+    : [];
+  const entryByList = new Map(entries.map((e) => [e.list_id, e]));
+
+  const scopes = [{ id: null, name: OVERALL_RANKING }, ...categories].map(({ id, name }): ContestantScopeStanding => {
+    const list = latestList.get(id);
+    const entry = list && entryByList.get(list.id);
+    return {
+      categoryId: id,
+      scopeName: name,
+      refreshedAt: list?.refreshed_at ?? null,
+      standing:
+        entry && entry.judged
+          ? {
+              position: entry.position,
+              rating: entry.rating!,
+              range: entry.range!,
+              score: entry.score!,
+              wins: entry.wins!,
+              losses: entry.losses!,
+              matches: entry.matches!,
+            }
+          : null,
+      history: history.get(id) ?? [],
+    };
+  });
+
+  const records = (check(opponents) as { opponent_id: string; wins: number; losses: number }[]).map((o) => ({
+    opponentId: o.opponent_id,
+    wins: o.wins,
+    losses: o.losses,
+    matches: o.wins + o.losses,
+  }));
+  const wins = records.reduce((sum, r) => sum + r.wins, 0);
+  const losses = records.reduce((sum, r) => sum + r.losses, 0);
+  const frequent = records.slice(0, HEAD_TO_HEAD_SHOWN);
+  const cards = frequent.length
+    ? new Map(
+        (check(await db.from("contestants").select(CARD_COLUMNS).in("id", frequent.map((r) => r.opponentId))) as CardRow[]).map((c) => [
+          c.id,
+          card(c),
+        ]),
+      )
+    : new Map<string, ContestantCard>();
+  const headToHead = frequent
+    .filter((r) => cards.has(r.opponentId))
+    .map(({ opponentId, ...r }) => ({ opponent: cards.get(opponentId)!, ...r }));
+
+  return { scopes, record: { wins, losses, matches: wins + losses }, headToHead };
 }
 
 type EntryRow = {
