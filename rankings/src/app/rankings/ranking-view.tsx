@@ -1,13 +1,15 @@
 import Image from "next/image";
 import Link from "next/link";
+import { readVariant } from "@/lib/prototype-variant-server";
 import type { GlobalRanking, PersonalRanking } from "@/server/rankings";
+import { VariantArcade, VariantEditorial, VariantGacha } from "./ranking-variants";
 
 /** `?version=unrated` shows the Unrated Ranking; without it, the Rated Ranking. */
 export function isRatedVersion(searchParams: Record<string, string | string[] | undefined>) {
   return searchParams.version !== "unrated";
 }
 
-export function RankingView({
+export async function RankingView({
   ranking,
   kind,
   path,
@@ -16,6 +18,11 @@ export function RankingView({
   kind: "Overall Ranking" | "Category Ranking";
   path: string;
 }) {
+  const variant = await readVariant();
+  if (variant === "A") return <VariantArcade ranking={ranking} kind={kind} path={path} />;
+  if (variant === "B") return <VariantGacha ranking={ranking} kind={kind} path={path} />;
+  if (variant === "C") return <VariantEditorial ranking={ranking} kind={kind} path={path} />;
+
   return (
     <main className="mx-auto flex w-full max-w-xl flex-1 flex-col gap-6 px-5 py-8">
       <header className="flex flex-col gap-1">

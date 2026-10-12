@@ -2,8 +2,58 @@
 
 @theme inline {
   --font-sans: var(--font-geist-sans);
+  /* PROTOTYPE: variant display faces */
+  --font-arcade: var(--font-anton);
+  --font-gacha: var(--font-fredoka);
+  --font-serif: var(--font-fraunces);
+}
+
+@theme {
+  --animate-neon: neon 2.4s ease-in-out infinite;
+  --animate-holo: holo 6s linear infinite;
+  --animate-float: float 3.5s ease-in-out infinite;
+  --animate-slam: slam 0.5s cubic-bezier(0.2, 1.6, 0.4, 1) both;
+
+  @keyframes neon {
+    0%, 100% { text-shadow: 0 0 8px #ff2e88, 0 0 24px #ff2e88, 0 0 48px #ff8a00; }
+    50% { text-shadow: 0 0 4px #ff2e88, 0 0 12px #ff2e88, 0 0 20px #ff8a00; }
+  }
+  @keyframes holo {
+    to { background-position: 200% 50%; }
+  }
+  @keyframes float {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-6px); }
+  }
+  @keyframes slam {
+    from { transform: scale(2.4) rotate(-12deg); opacity: 0; }
+    to { transform: scale(1) rotate(-6deg); opacity: 1; }
+  }
 }
 
 body {
   font-family: var(--font-geist-sans), system-ui, sans-serif;
+}
+
+/* PROTOTYPE: variant B background and holo frame */
+.gacha-bg {
+  background:
+    radial-gradient(60rem 40rem at 10% -10%, #5a1f4f 0%, transparent 60%),
+    radial-gradient(50rem 40rem at 110% 10%, #2e2470 0%, transparent 55%),
+    radial-gradient(50rem 40rem at 50% 110%, #4a2340 0%, transparent 60%),
+    #150f2b;
+  background-attachment: fixed;
+}
+.gacha-bg,
+.gacha-bg button,
+.gacha-bg input {
+  font-family: var(--font-fredoka), system-ui, sans-serif;
+}
+.holo-frame {
+  background: linear-gradient(115deg, #ffb3d1, #ffd9a8, #fff3b0, #b8f2e6, #c9b8ff, #ffb3d1, #ffd9a8);
+  background-size: 200% 100%;
+}
+.holo-sheen {
+  background: linear-gradient(115deg, transparent 30%, rgb(255 255 255 / 0.22) 45%, transparent 60%);
+  background-size: 250% 100%;
 }

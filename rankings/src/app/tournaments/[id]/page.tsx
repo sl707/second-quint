@@ -11,6 +11,8 @@ import { HumanCheck } from "../../human-check";
 import { giveUpTournamentAction } from "../actions";
 import { BracketView } from "./bracket-view";
 import { MatchPicker } from "./match-picker";
+import { readVariant } from "@/lib/prototype-variant-server";
+import { VariantArcade, VariantEditorial, VariantGacha } from "./tournament-variants";
 import { UndoButton } from "./undo-button";
 
 export const metadata: Metadata = { title: "Tournament" };
@@ -26,6 +28,12 @@ export default async function TournamentPage({ params }: PageProps<"/tournaments
   const banned = await isBanned(createAdminClient(), person);
   const playable = tournament.status === "in_progress" && !banned;
   const needsHumanCheck = !!person && !isSignedIn(person) && !(await isVisitorVerified(createAdminClient(), person));
+
+  const variant = await readVariant();
+  const variantProps = { tournament, banned, playable, needsHumanCheck };
+  if (variant === "A") return <VariantArcade {...variantProps} />;
+  if (variant === "B") return <VariantGacha {...variantProps} />;
+  if (variant === "C") return <VariantEditorial {...variantProps} />;
 
   return (
     <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-6 px-4 py-5 md:px-8 md:py-8">

@@ -2,13 +2,19 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { publicEnv } from "@/lib/env";
 import { PATHNAME_HEADER } from "@/lib/pathname";
+import { parseVariant, VARIANT_COOKIE, VARIANT_HEADER } from "@/lib/prototype-variant";
 
 /** Refreshes the Supabase session cookies before rendering, since Server Components can't set cookies. */
 export async function proxy(request: NextRequest) {
+  const queryVariant = parseVariant(request.nextUrl.searchParams.get("variant"));
+  const variant = queryVariant ?? parseVariant(request.cookies.get(VARIANT_COOKIE)?.value) ?? "current";
   const forward = () => {
     const headers = new Headers(request.headers);
     headers.set(PATHNAME_HEADER, request.nextUrl.pathname);
-    return NextResponse.next({ request: { headers } });
+    headers.set(VARIANT_HEADER, variant);
+    const next = NextResponse.next({ request: { headers } });
+    if (queryVariant) next.cookies.set(VARIANT_COOKIE, queryVariant, { path: "/", sameSite: "lax" });
+    return next;
   };
   let response = forward();
 
