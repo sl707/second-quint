@@ -44,6 +44,10 @@ Spec: `../.scratch/rankings/spec.md`. Tickets: `../.scratch/rankings/issues/`. V
 
 The ranking refresher (`refreshGlobalRankings` in `src/server/rankings.ts`) recomputes every global ranking with the pure calculation in `src/domain/ranking/` and stores one ready-made list per scope (`ranking_lists`, `ranking_entries`); ranking pages only read those rows. Service tests call `refreshGlobalRankings` directly instead of waiting for the schedule.
 
+### Catalog and pictures
+
+The catalog service (`src/server/catalog.ts`) adds and edits contestants and categories and enforces who may edit what (rules in `src/domain/catalog/permissions.ts`). Pictures are resized in the browser by `src/lib/picture/resize.ts` to center-cropped squares at 512 and 128 px (WebP; JPEG where the browser can't encode WebP), using the pure rules in `src/domain/picture/picture.ts`, which a server-side import with `sharp` can reuse. The server stores them in the public `pictures` Storage bucket (created by a migration) under the SHA-256 of their bytes, cached for a year. `contestants.source_id` is an internal, unique ID for bulk-imported contestants (e.g. `mal:12345`), never shown.
+
 ### Test seams
 
 - **Unit** (`npm test`): `src/**/*.test.ts`, pure domain code, including the ranking calculation

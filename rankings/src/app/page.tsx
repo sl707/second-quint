@@ -21,6 +21,12 @@ export default async function Home() {
       >
         See rankings
       </Link>
+      <Link
+        href="/categories"
+        className="self-start rounded-xl border border-zinc-300 bg-white px-5 py-3 text-lg font-medium hover:border-zinc-500"
+      >
+        Browse categories
+      </Link>
     </main>
   );
 }

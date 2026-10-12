@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import sharp from "sharp";
 
 /** Creates a category with `count` fresh contestants, so each test owns its scope. */
 export async function createCategory(db: SupabaseClient, count: number) {
@@ -42,9 +43,10 @@ export function newVisitor() {
 /** Stores one finished match directly, as if a visitor had picked it in Infinite Mode. */
 export async function recordMatch(
   db: SupabaseClient,
-  match: { winnerId: string; loserId: string; categoryId: string | null; playedAt?: Date; excluded?: boolean },
+  match: { winnerId: string; loserId: string; categoryId: string | null; playedAt?: Date; excluded?: boolean; rated?: boolean },
 ) {
   const { error } = await db.from("matches").insert({
+    rated: match.rated ?? false,
     winner_id: match.winnerId,
     loser_id: match.loserId,
     category_id: match.categoryId,
@@ -75,22 +77,54 @@ export function uniqueDisplayName(prefix = "test") {
   return `${prefix}_${randomUUID().slice(0, 8)}`;
 }
 
+/** A signed-in player who has chosen a display name. */
+export async function newPlayer(db: SupabaseClient) {
+  const { userId } = await newUser(db);
+  const displayName = uniqueDisplayName();
+  const { data, error } = await db.from("players").insert({ user_id: userId, display_name: displayName }).select("id").single();
+  if (error) throw error;
+  return { playerId: data.id as string, displayName };
+}
+
+/** Makes a player the admin. */
+export async function makeAdmin(db: SupabaseClient, playerId: string) {
+  const { error } = await db.from("players").update({ is_admin: true }).eq("id", playerId);
+  if (error) throw error;
+}
+
+/** Both sizes of a resized picture, as the browser would upload them: square WebPs at 512 and 128 px. */
+export async function testPicture(color: string) {
+  const square = (size: number) =>
+    sharp({ create: { width: size, height: size, channels: 3, background: color } })
+      .composite([{ input: Buffer.from(randomUUID()), raw: { width: 9, height: 4, channels: 1 }, top: 0, left: 0 }])
+      .webp()
+      .toBuffer()
+      .then((b) => new Uint8Array(b));
+  return { picture512: await square(512), picture128: await square(128) };
+}
+
 /** Removes everything the fixtures created, so the all-contestants scope doesn't keep growing. */
 export async function removeTestData(db: SupabaseClient) {
   if (visitors.length) {
     await db.from("matches").delete().in("visitor_id", visitors);
     await db.from("tournaments").delete().in("visitor_id", visitors);
   }
-  if (users.length) {
-    const { data: players } = await db.from("players").select("id").in("user_id", users);
-    const playerIds = (players ?? []).map((p) => p.id as string);
-    if (playerIds.length) {
-      await db.from("matches").delete().in("player_id", playerIds);
-      await db.from("tournaments").delete().in("player_id", playerIds);
-      await db.from("players").delete().in("id", playerIds);
-    }
-    for (const id of users.splice(0)) await db.auth.admin.deleteUser(id);
+  const { data: players } = users.length ? await db.from("players").select("id").in("user_id", users) : { data: [] };
+  const playerIds = (players ?? []).map((p) => p.id as string);
+  if (playerIds.length) {
+    await db.from("matches").delete().in("player_id", playerIds);
+    await db.from("tournaments").delete().in("player_id", playerIds);
   }
-  await db.from("contestants").delete().like("name", "Test %");
+
   await db.from("categories").delete().like("name", "Test category %");
+  const { data: contestants } = await db.from("contestants").select("id").like("name", "Test %");
+  const pictures = new Set<string>();
+  for (const { id } of contestants ?? []) {
+    const { data } = await db.rpc("delete_contestant", { p_contestant_id: id });
+    for (const url of (data ?? []) as string[]) pictures.add(url.split("/pictures/").pop()!);
+  }
+  if (pictures.size) await db.storage.from("pictures").remove([...pictures]);
+
+  if (playerIds.length) await db.from("players").delete().in("id", playerIds);
+  for (const id of users.splice(0)) await db.auth.admin.deleteUser(id);
 }

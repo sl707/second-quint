@@ -78,6 +78,10 @@ Supabase pg_cron runs `refresh-global-rankings` every 5 minutes. It uses pg_net 
 
 To rotate the secret, change it in Vercel, redeploy, then `select vault.update_secret((select id from vault.secrets where name = 'rankings_refresh_secret'), '<new secret>');`.
 
+## Contestant pictures
+
+The public `pictures` Storage bucket is created by a migration, so `supabase db push` sets it up in production; there is nothing to configure. The app's server uploads with `SUPABASE_SECRET_KEY`. Files are named by the SHA-256 of their bytes and served with `cache-control: max-age=31536000`, so a stored file must never be overwritten; deleting or re-picturing a contestant removes files no other contestant uses.
+
 ## Notifications and things to watch
 
 - **Storage alert**: you're notified through the GitHub issue (you watch your own repo by default). It's created once, its numbers are refreshed daily without notifying, and it gets a comment when a different resource crosses 80%. Close it after acting; it reopens as a new issue if usage crosses again.

@@ -4,7 +4,7 @@ import { cache } from "react";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createVisitorClient } from "@/lib/supabase/server";
 import { ensureVisitor, readVisitor } from "@/lib/visitor";
-import type { Person } from "@/server/game";
+import type { Person, SignedInPlayer } from "@/server/game";
 import { findPlayerByUser, type Player } from "@/server/profiles";
 
 export type Session =
@@ -21,6 +21,12 @@ export const getSession = cache(async (): Promise<Session> => {
   const player = await findPlayerByUser(createAdminClient(), userId);
   return player ? { status: "player", userId, player } : { status: "needs-display-name", userId };
 });
+
+/** The signed-in player, or null for visitors and anyone who hasn't chosen a display name yet. */
+export async function readSignedInPlayer(): Promise<SignedInPlayer | null> {
+  const session = await getSession();
+  return session.status === "player" ? { playerId: session.player.id } : null;
+}
 
 /** The player if signed in, else the signed-out visitor from their cookie, or null if neither has played. */
 export async function readPerson(): Promise<Person | null> {
