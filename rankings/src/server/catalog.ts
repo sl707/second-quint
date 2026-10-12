@@ -439,6 +439,15 @@ export async function getContestant(
   return { ...toContestant(row), categories, canEdit: await mayEditContestant(db, by, row) };
 }
 
+/** The contestant a merged-away contestant now lives on, for redirecting its page; null if it wasn't merged. */
+export async function findMergeSurvivor(db: SupabaseClient, contestantId: string): Promise<string | null> {
+  if (!UUID.test(contestantId)) return null;
+  const row = check(await db.from("contestants").select("merged_into").eq("id", contestantId).maybeSingle()) as {
+    merged_into: string | null;
+  } | null;
+  return row?.merged_into ?? null;
+}
+
 async function editableContestant(db: SupabaseClient, player: SignedInPlayer, contestantId: string) {
   const by = await actor(db, player);
   const contestant = await readContestant(db, contestantId);

@@ -4,7 +4,7 @@ import { refresh } from "next/cache";
 import { redirect } from "next/navigation";
 import { readSignedInPlayer } from "@/lib/session";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { AdminError, closeReport, deleteCategory, removeContestantFromCategory } from "@/server/admin";
+import { AdminError, closeReport, deleteCategory, mergeContestants, removeContestantFromCategory } from "@/server/admin";
 
 async function asAdmin(run: () => Promise<void>): Promise<void> {
   try {
@@ -23,6 +23,17 @@ export async function closeReportAction(reportId: number, outcome: "resolved" | 
 export async function removeFromCategoryAction(categoryId: string, contestantId: string): Promise<void> {
   const player = await readSignedInPlayer();
   await asAdmin(() => removeContestantFromCategory(createAdminClient(), player, String(categoryId), String(contestantId)));
+}
+
+export async function mergeContestantsAction(duplicateId: string, survivorId: string): Promise<void> {
+  const player = await readSignedInPlayer();
+  try {
+    await mergeContestants(createAdminClient(), player, String(duplicateId), String(survivorId));
+  } catch (error) {
+    if (error instanceof AdminError) redirect("/admin");
+    throw error;
+  }
+  redirect(`/contestants/${survivorId}`);
 }
 
 export async function deleteCategoryAction(categoryId: string): Promise<void> {

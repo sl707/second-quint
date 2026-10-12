@@ -1,12 +1,12 @@
 import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, permanentRedirect } from "next/navigation";
 import { cache } from "react";
 import { readSignedInPlayer } from "@/lib/session";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createVisitorClient } from "@/lib/supabase/server";
-import { getContestant } from "@/server/catalog";
+import { findMergeSurvivor, getContestant } from "@/server/catalog";
 import { getContestantStanding, type ContestantScopeStanding } from "@/server/rankings";
 import { AddedBy } from "../../added-by";
 import { ReportForm } from "../../report-form";
@@ -25,9 +25,14 @@ const sectionHeading = "text-sm font-medium uppercase tracking-wide text-zinc-50
 
 /** `?version=unrated` shows the Unrated Rankings and every match; without it, rated only. */
 export default async function ContestantPage({ params, searchParams }: PageProps<"/contestants/[id]">) {
-  const contestant = await loadContestant((await params).id);
-  if (!contestant) notFound();
+  const { id } = await params;
+  const contestant = await loadContestant(id);
   const rated = isRatedVersion(await searchParams);
+  if (!contestant) {
+    const survivorId = await findMergeSurvivor(createAdminClient(), id);
+    if (survivorId) permanentRedirect(`/contestants/${survivorId}${rated ? "" : "?version=unrated"}`);
+    notFound();
+  }
   const standing = (await getContestantStanding(await createVisitorClient(), contestant.id, { rated }))!;
   const path = `/contestants/${contestant.id}`;
 

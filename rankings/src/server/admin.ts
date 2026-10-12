@@ -123,6 +123,62 @@ export async function deleteCategory(db: SupabaseClient, player: SignedInPlayer 
   if (!deleted) throw new AdminError("That category doesn't exist.");
 }
 
+const MERGE_REFUSALS: Record<string, string> = {
+  same: "Pick two different contestants.",
+  missing: "One of those contestants doesn't exist.",
+  already_merged: "One of those contestants was already merged.",
+};
+
+export type MergeCandidate = { id: string; name: string; picture128Url: string };
+
+/** The contestant ID in a pasted contestant link or ID, if any. */
+function contestantIdIn(input: string): string | null {
+  return input.match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i)?.[0].toLowerCase() ?? null;
+}
+
+/**
+ * The two contestants a merge would combine, from pasted contestant links or IDs, for the admin to
+ * confirm. Throws an `AdminError` saying what's wrong when the merge couldn't happen. Admin only.
+ */
+export async function previewMerge(
+  db: SupabaseClient,
+  player: SignedInPlayer | null,
+  duplicateInput: string,
+  survivorInput: string,
+): Promise<{ duplicate: MergeCandidate; survivor: MergeCandidate }> {
+  await requireAdmin(db, player);
+  const [duplicateId, survivorId] = [contestantIdIn(duplicateInput), contestantIdIn(survivorInput)];
+  if (!duplicateId || !survivorId) throw new AdminError("Paste a contestant link or ID in both boxes.");
+  if (duplicateId === survivorId) throw new AdminError(MERGE_REFUSALS.same);
+  const rows = check(
+    await db.from("contestants").select("id, name, picture_128_url, merged_into").in("id", [duplicateId, survivorId]),
+  ) as { id: string; name: string; picture_128_url: string; merged_into: string | null }[];
+  const find = (id: string) => rows.find((r) => r.id === id);
+  const [duplicate, survivor] = [find(duplicateId), find(survivorId)];
+  if (!duplicate || !survivor) throw new AdminError(MERGE_REFUSALS.missing);
+  if (duplicate.merged_into || survivor.merged_into) throw new AdminError(MERGE_REFUSALS.already_merged);
+  const toCandidate = (r: typeof duplicate) => ({ id: r.id, name: r.name, picture128Url: r.picture_128_url });
+  return { duplicate: toCandidate(duplicate), survivor: toCandidate(survivor) };
+}
+
+/**
+ * Merges a duplicate contestant into the survivor, in one transaction: the duplicate's matches,
+ * categories, and covers move to the survivor, matches between the two are dropped, tournaments
+ * that drew both end as removed, and the duplicate's page redirects to the survivor's. Rankings
+ * take in the moved matches at the next refresh. Admin only.
+ */
+export async function mergeContestants(
+  db: SupabaseClient,
+  player: SignedInPlayer | null,
+  duplicateId: string,
+  survivorId: string,
+): Promise<void> {
+  await requireAdmin(db, player);
+  if (!UUID.test(duplicateId) || !UUID.test(survivorId)) throw new AdminError(MERGE_REFUSALS.missing);
+  const outcome = check(await db.rpc("merge_contestants", { p_duplicate_id: duplicateId, p_survivor_id: survivorId })) as string;
+  if (outcome !== "merged") throw new AdminError(MERGE_REFUSALS[outcome]);
+}
+
 /** Closes an open report: resolved (acted on) or dismissed (nothing wrong). Admin only. */
 export async function closeReport(
   db: SupabaseClient,

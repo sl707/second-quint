@@ -59,3 +59,27 @@ test("a visitor reports a contestant, and the admin resolves it and removes the 
   await expect(list.getByRole("link", { name: offtopic.name })).toHaveCount(0);
   await context.close();
 });
+
+test("the admin merges a duplicate contestant, and its page then shows the survivor", async ({ page, baseURL }) => {
+  const tag = randomUUID().slice(0, 6);
+  const { data: rows } = await admin
+    .from("contestants")
+    .insert(["Duplicate", "Survivor"].map((n) => ({ name: `E2E ${n} ${tag}`, picture_512_url: "/samples/apple-512.svg", picture_128_url: "/samples/apple-128.svg" })))
+    .select("id, name");
+  const [duplicate, survivor] = ["Duplicate", "Survivor"].map((n) => rows!.find((r) => r.name.startsWith(`E2E ${n}`))!);
+  contestants.push(duplicate.id, survivor.id);
+  const user = await signInAsNewUser(page.context(), baseURL!);
+  users.push(user.userId);
+  await admin.from("players").insert({ user_id: user.userId, display_name: `Admin_${tag}`, is_admin: true });
+
+  await page.goto("/admin");
+  await page.getByLabel("Duplicate (contestant link or ID)").fill(`${baseURL}/contestants/${duplicate.id}`);
+  await page.getByLabel("Survivor (contestant link or ID)").fill(survivor.id);
+  await page.getByRole("button", { name: "Review merge" }).click();
+  await page.getByRole("button", { name: `Merge ${duplicate.name} into ${survivor.name}` }).click();
+  await expect(page).toHaveURL(`/contestants/${survivor.id}`);
+
+  await page.goto(`/contestants/${duplicate.id}`);
+  await expect(page).toHaveURL(`/contestants/${survivor.id}`);
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText(survivor.name);
+});
