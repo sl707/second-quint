@@ -2,7 +2,22 @@ import Image from "next/image";
 import Link from "next/link";
 import type { GlobalRanking } from "@/server/rankings";
 
-export function RankingView({ ranking, kind }: { ranking: GlobalRanking; kind: "Overall Ranking" | "Category Ranking" }) {
+/** `?version=unrated` shows the Unrated Ranking; without it, the Rated Ranking. */
+export function isRatedVersion(searchParams: Record<string, string | string[] | undefined>) {
+  return searchParams.version !== "unrated";
+}
+
+export function RankingView({
+  ranking,
+  kind,
+  path,
+}: {
+  ranking: GlobalRanking;
+  kind: "Overall Ranking" | "Category Ranking";
+  path: string;
+}) {
+  const versionClass = (current: boolean) =>
+    `flex-1 rounded-lg px-3 py-1.5 text-center text-sm font-medium ${current ? "bg-white text-zinc-900 shadow-sm" : "text-zinc-600 hover:text-zinc-900"}`;
   return (
     <main className="mx-auto flex w-full max-w-xl flex-1 flex-col gap-6 px-5 py-8">
       <header className="flex flex-col gap-1">
@@ -11,9 +26,23 @@ export function RankingView({ ranking, kind }: { ranking: GlobalRanking; kind: "
         </Link>
         <h1 className="text-2xl font-semibold tracking-tight">{ranking.scopeName}</h1>
         <p className="text-sm text-zinc-600">
-          {kind === "Category Ranking" ? "Category Ranking · " : ""}Unrated · everyone&apos;s picks, recent matches count more
+          {kind === "Category Ranking" ? "Category Ranking · " : ""}
+          {ranking.rated ? "Rated · rated picks only" : "Unrated · every pick"}, recent matches count more
         </p>
       </header>
+
+      <nav aria-label="Ranking version" className="flex gap-1 rounded-xl bg-zinc-200 p-1">
+        <Link href={path} aria-current={ranking.rated ? "page" : undefined} className={versionClass(ranking.rated)}>
+          Rated
+        </Link>
+        <Link
+          href={`${path}?version=unrated`}
+          aria-current={ranking.rated ? undefined : "page"}
+          className={versionClass(!ranking.rated)}
+        >
+          Unrated
+        </Link>
+      </nav>
 
       {ranking.refreshedAt === null ? (
         <p className="rounded-xl border border-zinc-200 bg-white px-4 py-3 text-zinc-600">
@@ -47,7 +76,9 @@ export function RankingView({ ranking, kind }: { ranking: GlobalRanking; kind: "
               ))}
             </ol>
           ) : (
-            <p className="text-zinc-600">No matches have been played here yet.</p>
+            <p className="text-zinc-600">
+              {ranking.rated ? "No rated matches have been played here yet." : "No matches have been played here yet."}
+            </p>
           )}
 
           {ranking.notYetJudged.length > 0 && (

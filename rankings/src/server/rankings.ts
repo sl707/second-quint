@@ -22,6 +22,8 @@ export type RankingRow = {
 export type GlobalRanking = {
   categoryId: ScopeId;
   scopeName: string;
+  /** Rated Ranking (only rated matches) or Unrated Ranking (every match) */
+  rated: boolean;
   /** null until the ranking refresher has run since the scope was created */
   refreshedAt: string | null;
   ranked: RankingRow[];
@@ -44,7 +46,7 @@ async function readAll<T>(page: (from: number, to: number) => PromiseLike<{ data
   }
 }
 
-type MatchRow = { id: number; winner_id: string; loser_id: string; category_id: string | null; played_at: string };
+type MatchRow = { id: number; winner_id: string; loser_id: string; category_id: string | null; played_at: string; rated: boolean };
 
 async function readCountedMatches(db: SupabaseClient): Promise<MatchRow[]> {
   const rows: MatchRow[] = [];
@@ -52,7 +54,7 @@ async function readCountedMatches(db: SupabaseClient): Promise<MatchRow[]> {
     const batch = check(
       await db
         .from("matches")
-        .select("id, winner_id, loser_id, category_id, played_at")
+        .select("id, winner_id, loser_id, category_id, played_at, rated")
         .eq("excluded", false)
         .gt("id", after)
         .order("id")
@@ -65,9 +67,10 @@ async function readCountedMatches(db: SupabaseClient): Promise<MatchRow[]> {
 }
 
 /**
- * Recomputes every global unrated ranking (each category plus overall) from all counted matches
- * and stores the ready-made lists. A category's matches feed its own ranking and the overall
- * ranking; matches drawn from all contestants feed only the overall ranking.
+ * Recomputes every global ranking (each category plus overall, each in a rated and an unrated
+ * version) from all counted matches and stores the ready-made lists. A category's matches feed
+ * its own ranking and the overall ranking; matches drawn from all contestants feed only the
+ * overall ranking. Rated rankings use only rated matches; unrated rankings use every match.
  */
 export async function refreshGlobalRankings(
   db: SupabaseClient,
@@ -89,64 +92,77 @@ export async function refreshGlobalRankings(
     readAll<{ id: string }>((from, to) => db.from("categories").select("id").order("id").range(from, to)),
   ]);
 
-  const matchesByCategory = new Map<string, RankingMatch[]>();
-  const allMatches: RankingMatch[] = matchRows.map((m) => {
-    const match = { winnerId: m.winner_id, loserId: m.loser_id, playedAt: new Date(m.played_at) };
-    if (m.category_id) {
-      const list = matchesByCategory.get(m.category_id) ?? [];
-      list.push(match);
-      matchesByCategory.set(m.category_id, list);
-    }
-    return match;
-  });
-
   const membersByCategory = new Map<string, { id: string; name: string }[]>(categories.map((c) => [c.id, []]));
   for (const m of memberships) membersByCategory.get(m.category_id)?.push({ id: m.contestant_id, name: m.contestants.name });
-
-  const scopes: { categoryId: ScopeId; contestantIds: string[]; matches: RankingMatch[] }[] = [
-    { categoryId: null, contestantIds: contestants.map((c) => c.id), matches: allMatches },
+  const scopes: { categoryId: ScopeId; contestantIds: string[] }[] = [
+    { categoryId: null, contestantIds: contestants.map((c) => c.id) },
     ...[...membersByCategory].map(([categoryId, members]) => ({
       categoryId,
       contestantIds: members.sort((a, b) => a.name.localeCompare(b.name)).map((m) => m.id),
-      matches: matchesByCategory.get(categoryId) ?? [],
     })),
   ];
 
-  for (const scope of scopes) {
-    const ranking = calculateRanking(scope.matches, {
-      contestantIds: scope.contestantIds,
-      halfLifeDays: GLOBAL_HALF_LIFE_DAYS,
-      now,
-    });
-    const entries = [
-      ...ranking.ranked.map((r, i) => ({
-        contestant_id: r.contestantId,
-        position: i + 1,
-        judged: true,
-        rating: r.rating,
-        range: r.range,
-        score: r.score,
-        wins: r.wins,
-        losses: r.losses,
-        matches: r.matches,
-      })),
-      ...ranking.notYetJudged.map((contestantId, i) => ({
-        contestant_id: contestantId,
-        position: ranking.ranked.length + i + 1,
-        judged: false,
-      })),
-    ];
-    check(
-      await db.rpc("store_ranking_list", {
-        p_category_id: scope.categoryId,
-        p_rated: false,
-        p_refreshed_at: now.toISOString(),
-        p_entries: entries,
-      }),
-    );
+  let lists = 0;
+  for (const rated of [true, false]) {
+    const { all, byCategory } = groupByScope(rated ? matchRows.filter((m) => m.rated) : matchRows);
+    for (const scope of scopes) {
+      const matches = scope.categoryId === null ? all : (byCategory.get(scope.categoryId) ?? []);
+      const ranking = calculateRanking(matches, { contestantIds: scope.contestantIds, halfLifeDays: GLOBAL_HALF_LIFE_DAYS, now });
+      await storeList(db, scope.categoryId, rated, now, ranking);
+      lists++;
+    }
   }
 
-  return { lists: scopes.length, matches: allMatches.length };
+  return { lists, matches: matchRows.length };
+}
+
+function groupByScope(rows: MatchRow[]) {
+  const byCategory = new Map<string, RankingMatch[]>();
+  const all = rows.map((m) => {
+    const match = { winnerId: m.winner_id, loserId: m.loser_id, playedAt: new Date(m.played_at) };
+    if (m.category_id) {
+      const list = byCategory.get(m.category_id) ?? [];
+      list.push(match);
+      byCategory.set(m.category_id, list);
+    }
+    return match;
+  });
+  return { all, byCategory };
+}
+
+async function storeList(
+  db: SupabaseClient,
+  categoryId: ScopeId,
+  rated: boolean,
+  now: Date,
+  ranking: ReturnType<typeof calculateRanking>,
+) {
+  const entries = [
+    ...ranking.ranked.map((r, i) => ({
+      contestant_id: r.contestantId,
+      position: i + 1,
+      judged: true,
+      rating: r.rating,
+      range: r.range,
+      score: r.score,
+      wins: r.wins,
+      losses: r.losses,
+      matches: r.matches,
+    })),
+    ...ranking.notYetJudged.map((contestantId, i) => ({
+      contestant_id: contestantId,
+      position: ranking.ranked.length + i + 1,
+      judged: false,
+    })),
+  ];
+  check(
+    await db.rpc("store_ranking_list", {
+      p_category_id: categoryId,
+      p_rated: rated,
+      p_refreshed_at: now.toISOString(),
+      p_entries: entries,
+    }),
+  );
 }
 
 /** The Overall Ranking followed by every Category Ranking, by name. */
@@ -167,8 +183,15 @@ type EntryRow = {
   contestants: { id: string; name: string; picture_512_url: string; picture_128_url: string };
 };
 
-/** The latest stored global unrated ranking for a category, or the Overall Ranking; null if the category doesn't exist. */
-export async function getGlobalRanking(db: SupabaseClient, categoryId: ScopeId): Promise<GlobalRanking | null> {
+/**
+ * The latest stored global ranking for a category, or the Overall Ranking, in its rated or unrated
+ * version; null if the category doesn't exist.
+ */
+export async function getGlobalRanking(
+  db: SupabaseClient,
+  categoryId: ScopeId,
+  { rated }: { rated: boolean },
+): Promise<GlobalRanking | null> {
   let scopeName = OVERALL_RANKING;
   if (categoryId !== null) {
     const category = check(await db.from("categories").select("name").eq("id", categoryId).maybeSingle()) as { name: string } | null;
@@ -176,14 +199,14 @@ export async function getGlobalRanking(db: SupabaseClient, categoryId: ScopeId):
     scopeName = category.name;
   }
 
-  const listQuery = db.from("ranking_lists").select("id, refreshed_at").eq("rated", false);
+  const listQuery = db.from("ranking_lists").select("id, refreshed_at").eq("rated", rated);
   const list = check(
     await (categoryId === null ? listQuery.is("category_id", null) : listQuery.eq("category_id", categoryId))
       .order("refreshed_at", { ascending: false })
       .limit(1)
       .maybeSingle(),
   ) as { id: number; refreshed_at: string } | null;
-  if (!list) return { categoryId, scopeName, refreshedAt: null, ranked: [], notYetJudged: [] };
+  if (!list) return { categoryId, scopeName, rated, refreshedAt: null, ranked: [], notYetJudged: [] };
 
   const entries = await readAll<EntryRow>((from, to) =>
     db
@@ -203,6 +226,7 @@ export async function getGlobalRanking(db: SupabaseClient, categoryId: ScopeId):
   return {
     categoryId,
     scopeName,
+    rated,
     refreshedAt: list.refreshed_at,
     ranked: entries
       .filter((e) => e.judged)

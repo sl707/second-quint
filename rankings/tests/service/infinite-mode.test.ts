@@ -94,10 +94,10 @@ describe("Infinite Mode picks", () => {
     expect(await getInfinitePair(db, visitor, categoryId)).toEqual(pair);
   });
 
-  it("draws pairs using the scope's latest global ratings and match counts", async () => {
+  it("draws pairs using the scope's latest global rated ratings and match counts", async () => {
     const { categoryId, contestantIds } = await createCategory(db, 3);
     const [strong, weak] = contestantIds;
-    for (let i = 0; i < 15; i++) await recordMatch(db, { winnerId: strong, loserId: weak, categoryId });
+    for (let i = 0; i < 15; i++) await recordMatch(db, { winnerId: strong, loserId: weak, categoryId, rated: true });
     await refreshGlobalRankings(db);
     const visitor = newVisitor();
     let seed = 11;

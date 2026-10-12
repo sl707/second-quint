@@ -23,6 +23,13 @@ test("a played match shows up in the category ranking after a refresh", async ({
   await page.getByRole("link", { name: "Dog breeds" }).click();
 
   await expect(page.getByRole("heading", { name: "Dog breeds" })).toBeVisible();
+  const versions = page.getByRole("navigation", { name: "Ranking version" });
+  await expect(versions.getByRole("link", { name: "Rated", exact: true })).toHaveAttribute("aria-current", "page");
+
+  // A signed-out pick is unrated, so it shows in the Unrated version.
+  await versions.getByRole("link", { name: "Unrated", exact: true }).click();
+  await expect(page).toHaveURL(/version=unrated/);
+  await expect(versions.getByRole("link", { name: "Unrated", exact: true })).toHaveAttribute("aria-current", "page");
   const ranking = page.getByRole("list", { name: "Dog breeds" });
   await expect(ranking.getByRole("listitem").first()).toContainText("Score");
   await expect(ranking.getByRole("listitem").first()).toContainText("1");

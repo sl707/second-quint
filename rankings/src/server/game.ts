@@ -434,8 +434,8 @@ async function offeredPair(db: SupabaseClient, person: Person, categoryId: Scope
 }
 
 /**
- * The scope's latest global ratings and match counts, for pairing: from the rated list once the
- * refresher stores one, else the unrated list. Contestants it hasn't judged are left out.
+ * The scope's latest global rated ratings and match counts, for pairing. Contestants the rated
+ * list hasn't judged are left out.
  */
 async function latestRatings(db: SupabaseClient, categoryId: ScopeId) {
   const list = check(
@@ -443,7 +443,7 @@ async function latestRatings(db: SupabaseClient, categoryId: ScopeId) {
       .from("ranking_lists")
       .select("id")
       .filter(...inScope(categoryId))
-      .order("rated", { ascending: false })
+      .eq("rated", true)
       .order("refreshed_at", { ascending: false })
       .limit(1)
       .maybeSingle(),

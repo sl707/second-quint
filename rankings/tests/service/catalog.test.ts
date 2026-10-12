@@ -127,12 +127,18 @@ describe("categories", () => {
     expect(tournamentId).toBeTruthy();
   });
 
-  it("show the creator's chosen cover, or else their top contestant by score", async () => {
+  it("show the creator's chosen cover, or else their top contestant by rated score", async () => {
     const creator = await newPlayer(db);
     const { categoryId } = await createCategory(db, creator, { name: categoryName(), description: "" });
     const [a, b, c] = await addContestants(creator, 3);
     for (const x of [a, b]) await addContestantToCategory(db, creator, categoryId, x.id);
     for (let i = 0; i < 3; i++) await recordMatch(db, { winnerId: b.id, loserId: a.id, categoryId });
+    await refreshGlobalRankings(db);
+
+    expect((await getCategory(db, categoryId))?.cover?.id).toBe(a.id);
+    expect((await listCategories(db)).find((x) => x.id === categoryId)?.cover?.id).toBe(a.id);
+
+    for (let i = 0; i < 3; i++) await recordMatch(db, { winnerId: b.id, loserId: a.id, categoryId, rated: true });
     await refreshGlobalRankings(db);
 
     expect((await getCategory(db, categoryId))?.cover?.id).toBe(b.id);

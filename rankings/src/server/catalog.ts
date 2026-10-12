@@ -236,27 +236,23 @@ async function categoryMembers(db: SupabaseClient, categoryId: string): Promise<
   return rows.map((r) => toCard(r.contestants)).sort((a, b) => a.name.localeCompare(b.name) || a.id.localeCompare(b.id));
 }
 
-/** The member at the top of the category's latest stored ranking, preferring the rated one. */
+/** The member at the top of the category's latest stored rated ranking. */
 async function topContestantId(db: SupabaseClient, categoryId: string, memberIds: Set<string>): Promise<string | null> {
-  for (const rated of [true, false]) {
-    const list = check(
-      await db
-        .from("ranking_lists")
-        .select("id")
-        .eq("category_id", categoryId)
-        .eq("rated", rated)
-        .order("refreshed_at", { ascending: false })
-        .limit(1)
-        .maybeSingle(),
-    ) as { id: number } | null;
-    if (!list) continue;
-    const entries = check(
-      await db.from("ranking_entries").select("contestant_id").eq("list_id", list.id).eq("judged", true).order("position").limit(50),
-    ) as { contestant_id: string }[];
-    const top = entries.find((e) => memberIds.has(e.contestant_id));
-    if (top) return top.contestant_id;
-  }
-  return null;
+  const list = check(
+    await db
+      .from("ranking_lists")
+      .select("id")
+      .eq("category_id", categoryId)
+      .eq("rated", true)
+      .order("refreshed_at", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+  ) as { id: number } | null;
+  if (!list) return null;
+  const entries = check(
+    await db.from("ranking_entries").select("contestant_id").eq("list_id", list.id).eq("judged", true).order("position").limit(50),
+  ) as { contestant_id: string }[];
+  return entries.find((e) => memberIds.has(e.contestant_id))?.contestant_id ?? null;
 }
 
 function categoryRights(by: Actor | null, category: CategoryRow, contestantCount: number) {
@@ -529,15 +525,13 @@ export async function listCategories(db: SupabaseClient): Promise<CategorySummar
   const tops = check(
     await db
       .from("ranking_entries")
-      .select(`contestants!inner(${CARD_COLUMNS}), ranking_lists!inner(category_id, rated)`)
+      .select(`contestants!inner(${CARD_COLUMNS}), ranking_lists!inner(category_id)`)
       .eq("position", 1)
       .eq("judged", true)
+      .eq("ranking_lists.rated", true)
       .not("ranking_lists.category_id", "is", null),
-  ) as unknown as { contestants: CardRow; ranking_lists: { category_id: string; rated: boolean } }[];
-  const topByCategory = new Map<string, CardRow>();
-  for (const t of tops.sort((a, b) => Number(a.ranking_lists.rated) - Number(b.ranking_lists.rated))) {
-    topByCategory.set(t.ranking_lists.category_id, t.contestants);
-  }
+  ) as unknown as { contestants: CardRow; ranking_lists: { category_id: string } }[];
+  const topByCategory = new Map(tops.map((t) => [t.ranking_lists.category_id, t.contestants]));
 
   return Promise.all(
     rows.map(async (row) => {
