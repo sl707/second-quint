@@ -33,10 +33,20 @@ export function centerSquareCrop(width: number, height: number): { left: number;
   return { left: Math.floor((width - size) / 2), top: Math.floor((height - size) / 2), size };
 }
 
-/** The type of a resized picture, read from its bytes; null if it isn't a WebP or JPEG. */
-export function storedPictureType(bytes: Uint8Array): StoredPictureType | null {
+export type AcceptedPictureType = (typeof ACCEPTED_PICTURE_TYPES)[number];
+
+/** The type of an accepted picture, read from its bytes rather than any claimed type; null if it isn't one. */
+export function sniffPictureType(bytes: Uint8Array): AcceptedPictureType | null {
   const ascii = (from: number, to: number) => String.fromCharCode(...bytes.subarray(from, to));
   if (bytes.length >= 12 && ascii(0, 4) === "RIFF" && ascii(8, 12) === "WEBP") return "image/webp";
   if (bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) return "image/jpeg";
+  if (bytes.length >= 8 && bytes[0] === 0x89 && ascii(1, 8) === "PNG\r\n\x1a\n") return "image/png";
+  if (bytes.length >= 6 && (ascii(0, 6) === "GIF87a" || ascii(0, 6) === "GIF89a")) return "image/gif";
   return null;
+}
+
+/** The type of a resized picture, read from its bytes; null if it isn't a WebP or JPEG. */
+export function storedPictureType(bytes: Uint8Array): StoredPictureType | null {
+  const type = sniffPictureType(bytes);
+  return type === "image/webp" || type === "image/jpeg" ? type : null;
 }

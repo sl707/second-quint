@@ -7,6 +7,7 @@ import {
   addContestant,
   addContestantToCategory,
   CatalogError,
+  copyPictureFromLink,
   deleteContestant,
   editContestant,
   findSimilarContestants,
@@ -46,6 +47,21 @@ export async function saveContestantAction(_: ContestantFormState, form: FormDat
     throw error;
   }
   redirect(destination);
+}
+
+export type CopiedPictureResult = { ok: true; bytes: Uint8Array; type: string } | { ok: false; error: string };
+
+/** Copies a picture from a pasted link and hands it to the browser, which resizes it like an upload. */
+export async function copyPictureFromLinkAction(link: string): Promise<CopiedPictureResult> {
+  const player = await readSignedInPlayer();
+  if (!player) return { ok: false, error: "Sign in to add to the catalog." };
+  try {
+    const { bytes, type } = await copyPictureFromLink(createAdminClient(), player, String(link));
+    return { ok: true, bytes, type };
+  } catch (error) {
+    if (error instanceof CatalogError) return { ok: false, error: error.message };
+    throw error;
+  }
 }
 
 /** Existing contestants with names like `name`, for "Did you mean…?". */

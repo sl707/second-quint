@@ -10,6 +10,7 @@ import {
 } from "@/domain/catalog/permissions";
 import { MAX_STORED_PICTURE_BYTES, storedPictureType } from "@/domain/picture/picture";
 import type { ContestantCard, Person, SignedInPlayer } from "@/server/game";
+import { type CopiedPicture, fetchPictureFromLink, PictureLinkError, type PictureLinkOptions } from "@/server/picture-link";
 
 /** Who added a contestant or category: a player, "deleted" once they've deleted their account, or null for sample entries. */
 export type Contributor = { id: string; displayName: string } | "deleted" | null;
@@ -123,6 +124,27 @@ async function storePictures(db: SupabaseClient, picture: ResizedPicture) {
     storePicture(db, picture.picture128),
   ]);
   return { picture_512_url: picture512Url, picture_128_url: picture128Url };
+}
+
+export type { CopiedPicture, PictureLinkOptions };
+
+/**
+ * Copies a picture from a link a player pasted, for the browser to resize like an upload; the
+ * stored picture never refers back to the link. Signed-in players who aren't banned only.
+ */
+export async function copyPictureFromLink(
+  db: SupabaseClient,
+  player: SignedInPlayer,
+  link: string,
+  options?: PictureLinkOptions,
+): Promise<CopiedPicture> {
+  await actor(db, player);
+  try {
+    return await fetchPictureFromLink(String(link), options);
+  } catch (error) {
+    if (error instanceof PictureLinkError) throw new CatalogError(error.message);
+    throw error;
+  }
 }
 
 export type SimilarContestant = { id: string; name: string; picture128Url: string };

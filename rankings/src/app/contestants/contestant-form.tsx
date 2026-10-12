@@ -7,7 +7,7 @@ import { useActionState, useEffect, useState, useTransition, type FormEvent } fr
 import { ACCEPTED_PICTURE_TYPES } from "@/domain/picture/picture";
 import { PictureError, resizePicture, type ResizedPictureBlobs } from "@/lib/picture/resize";
 import type { SimilarContestant } from "@/server/catalog";
-import { findSimilarContestantsAction, saveContestantAction } from "./actions";
+import { copyPictureFromLinkAction, findSimilarContestantsAction, saveContestantAction } from "./actions";
 
 type Mode =
   | { kind: "add"; categoryId: string | null }
@@ -15,7 +15,10 @@ type Mode =
 
 const fieldLabel = "text-sm font-medium uppercase tracking-wide text-zinc-500";
 
-/** Adding a contestant, or editing one: a name and a picture shrunk in the browser before upload. */
+/**
+ * Adding a contestant, or editing one: a name and a picture, uploaded or copied from a link, shrunk
+ * in the browser before upload.
+ */
 export function ContestantForm({ mode }: { mode: Mode }) {
   const [state, formAction, saving] = useActionState(saveContestantAction, { error: null });
   const [, startTransition] = useTransition();
@@ -24,6 +27,8 @@ export function ContestantForm({ mode }: { mode: Mode }) {
   const [preview, setPreview] = useState<string | null>(null);
   const [pictureError, setPictureError] = useState<string | null>(null);
   const [resizing, setResizing] = useState(false);
+  const [link, setLink] = useState("");
+  const [copying, setCopying] = useState(false);
   const [similar, setSimilar] = useState<SimilarContestant[]>([]);
 
   useEffect(() => {
@@ -43,7 +48,7 @@ export function ContestantForm({ mode }: { mode: Mode }) {
     if (preview) URL.revokeObjectURL(preview);
   }, [preview]);
 
-  async function choosePicture(file: File | undefined) {
+  async function choosePicture(file: Blob | undefined) {
     setPictureError(null);
     setPicture(null);
     setPreview(null);
@@ -57,6 +62,24 @@ export function ContestantForm({ mode }: { mode: Mode }) {
       setPictureError(error instanceof PictureError ? error.message : "That picture couldn't be used.");
     } finally {
       setResizing(false);
+    }
+  }
+
+  async function copyFromLink() {
+    if (!link.trim()) {
+      setPictureError("Paste a link to a picture.");
+      return;
+    }
+    setPictureError(null);
+    setCopying(true);
+    try {
+      const copied = await copyPictureFromLinkAction(link);
+      if (copied.ok) await choosePicture(new Blob([copied.bytes as Uint8Array<ArrayBuffer>], { type: copied.type }));
+      else setPictureError(copied.error);
+    } catch {
+      setPictureError("That picture couldn't be copied. Try again, or upload it instead.");
+    } finally {
+      setCopying(false);
     }
   }
 
@@ -125,6 +148,39 @@ export function ContestantForm({ mode }: { mode: Mode }) {
         </span>
       </label>
 
+      <div className="flex flex-col gap-2">
+        <label htmlFor="picture-link" className={fieldLabel}>
+          Or paste an image link
+        </label>
+        <div className="flex gap-2">
+          <input
+            id="picture-link"
+            type="url"
+            inputMode="url"
+            autoComplete="off"
+            placeholder="https://…"
+            value={link}
+            onChange={(e) => setLink(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                copyFromLink();
+              }
+            }}
+            className="min-w-0 flex-1 rounded-xl border border-zinc-300 bg-white px-4 py-3 text-sm"
+          />
+          <button
+            type="button"
+            onClick={copyFromLink}
+            disabled={copying || resizing}
+            className="rounded-xl border border-zinc-300 bg-white px-4 py-3 text-sm font-medium disabled:opacity-50"
+          >
+            {copying ? "Copying…" : "Copy picture"}
+          </button>
+        </div>
+        <span className="text-sm text-zinc-500">The picture is copied once; the link isn&apos;t kept.</span>
+      </div>
+
       {resizing && <p className="text-sm text-zinc-600">Shrinking picture…</p>}
       {shown && (
         <img
@@ -144,7 +200,7 @@ export function ContestantForm({ mode }: { mode: Mode }) {
 
       <button
         type="submit"
-        disabled={saving || resizing}
+        disabled={saving || resizing || copying}
         className="rounded-xl bg-zinc-900 px-4 py-3 text-lg font-medium text-white disabled:opacity-50"
       >
         {saving ? "Saving…" : mode.kind === "add" ? "Add contestant" : "Save changes"}

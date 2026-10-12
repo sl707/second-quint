@@ -1,5 +1,26 @@
 import { describe, expect, it } from "vitest";
-import { centerSquareCrop, checkPictureFile, storedPictureType } from "./picture";
+import { centerSquareCrop, checkPictureFile, sniffPictureType, storedPictureType } from "./picture";
+
+const bytes = (...values: (number | string)[]) =>
+  new Uint8Array(values.flatMap((v) => (typeof v === "string" ? [...v].map((c) => c.charCodeAt(0)) : [v])));
+
+describe("picture type from its bytes", () => {
+  it("recognizes JPG, PNG, WebP, and GIF", () => {
+    expect(sniffPictureType(bytes(0xff, 0xd8, 0xff, 0xe0, 0, 0x10))).toBe("image/jpeg");
+    expect(sniffPictureType(bytes(0x89, "PNG", 0x0d, 0x0a, 0x1a, 0x0a, 0, 0))).toBe("image/png");
+    expect(sniffPictureType(bytes("RIFF", 0x24, 0, 0, 0, "WEBPVP8 "))).toBe("image/webp");
+    expect(sniffPictureType(bytes("GIF89a", 1, 0))).toBe("image/gif");
+    expect(sniffPictureType(bytes("GIF87a", 1, 0))).toBe("image/gif");
+  });
+
+  it("refuses anything else, whatever it claims to be", () => {
+    expect(sniffPictureType(bytes("<!doctype html><html>"))).toBeNull();
+    expect(sniffPictureType(bytes('<svg xmlns="http://www.w3.org/2000/svg">'))).toBeNull();
+    expect(sniffPictureType(bytes("RIFF", 0x24, 0, 0, 0, "WAVEfmt "))).toBeNull();
+    expect(sniffPictureType(bytes(0x89, "PN"))).toBeNull();
+    expect(sniffPictureType(new Uint8Array())).toBeNull();
+  });
+});
 
 describe("center square crop", () => {
   it("keeps the middle of a wide picture", () => {
