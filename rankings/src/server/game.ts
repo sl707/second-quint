@@ -17,16 +17,30 @@ export type SignedInPlayer = { playerId: string };
 /** Whoever is playing: their tournaments and matches are stored against them. */
 export type Person = Visitor | SignedInPlayer;
 
-/** The row filter that matches what `person` owns. */
-function ownedBy(person: Person): Record<string, string> {
-  return "playerId" in person ? { player_id: person.playerId } : { visitor_id: person.visitorId };
+export function isSignedIn(person: Person): person is SignedInPlayer {
+  return "playerId" in person;
+}
+
+/** The person's player ID and visitor ID, exactly one of them set. */
+export function personIds(person: Person): { playerId: string | null; visitorId: string | null } {
+  return isSignedIn(person) ? { playerId: person.playerId, visitorId: null } : { playerId: null, visitorId: person.visitorId };
+}
+
+/** The person as the `p_player_id` / `p_visitor_id` arguments of a play SQL function. */
+function personParams(person: Person) {
+  const { playerId, visitorId } = personIds(person);
+  return { p_player_id: playerId, p_visitor_id: visitorId };
 }
 
 /** The owner columns to store on a new tournament or match. */
 function ownerColumns(person: Person) {
-  return "playerId" in person
-    ? { player_id: person.playerId, visitor_id: null }
-    : { player_id: null, visitor_id: person.visitorId };
+  const { playerId, visitorId } = personIds(person);
+  return { player_id: playerId, visitor_id: visitorId };
+}
+
+/** The row filter that matches what `person` owns. */
+function ownedBy(person: Person): Record<string, string> {
+  return isSignedIn(person) ? { player_id: person.playerId } : { visitor_id: person.visitorId };
 }
 
 /** A category ID, or null for all contestants. */
@@ -93,7 +107,7 @@ const BANNED = "Your account is banned, so you can't play.";
 
 /** Whether `person` is a banned player; signed-out visitors never are. */
 export async function isBanned(db: SupabaseClient, person: Person | null): Promise<boolean> {
-  if (!person || !("playerId" in person)) return false;
+  if (!person || !isSignedIn(person)) return false;
   const row = check(await db.from("players").select("banned").eq("id", person.playerId).maybeSingle()) as { banned: boolean } | null;
   return row?.banned ?? false;
 }
@@ -221,15 +235,14 @@ export async function startTournament(
     throw new GameError(`Tournament size must be from ${sizes.min} to ${sizes.max}.`);
   }
 
-  const signedIn = "playerId" in person;
+  const signedIn = isSignedIn(person);
   const play = options.play ?? "rated-if-possible";
   const choseUnrated = signedIn && play === "unrated";
   const now = options.now ?? new Date();
   const allowance = ratedAllowance({ allContestants: options.categoryId === null, contestantCount: scope.length });
   const [started] = check<{ tournament_id: string | null; rated: boolean; unrated_reason: UnratedReason | null }[]>(
     await db.rpc("start_tournament", {
-      p_player_id: signedIn ? person.playerId : null,
-      p_visitor_id: signedIn ? null : person.visitorId,
+      ...personParams(person),
       p_category_id: options.categoryId,
       p_size: matchCountFor(size),
       p_bracket: { slots: drawBracket(pool, size, random) },
@@ -400,7 +413,7 @@ export async function pickWinner(
     throw new GameError("That match was already picked.");
   }
   if (!next.contestantIds.includes(winnerId)) throw new GameError("That contestant isn't in the current match.");
-  if (!("playerId" in person)) await claimSignedOutPick(db, person, options);
+  if (!isSignedIn(person)) await claimSignedOutPick(db, person, options);
 
   const { error } = await db.from("matches").insert({
     winner_id: winnerId,
@@ -575,7 +588,7 @@ export async function getInfinitePair(
   }: { random?: Random; /** The signed-in player chose to play unrated. */ unrated?: boolean; now?: Date } = {},
 ): Promise<InfinitePair> {
   await requireNotBanned(db, person);
-  const choseUnrated = "playerId" in person && unrated;
+  const choseUnrated = isSignedIn(person) && unrated;
   const name = await scopeName(db, categoryId);
   const scope = await scopeContestantIds(db, categoryId);
   if (scope.length < INFINITE_MODE_MIN_SCOPE) throw new GameError("Infinite Mode needs a scope of at least 2 contestants.");
@@ -621,7 +634,7 @@ async function infinitePlayStatus(
   categoryId: ScopeId,
   { choseUnrated, scopeSize, now }: { choseUnrated: boolean; scopeSize: number; now: Date },
 ): Promise<InfinitePlayStatus> {
-  if (!("playerId" in person)) return { rated: false, reason: "signed-out" };
+  if (!isSignedIn(person)) return { rated: false, reason: "signed-out" };
   if (choseUnrated) return { rated: false, reason: "chose-unrated" };
   const day = allowanceDay(now);
   const [used, skips] = await Promise.all([
@@ -673,13 +686,12 @@ export async function pickInfiniteWinner(
   if (winnerId !== row.first_contestant_id && winnerId !== row.second_contestant_id) {
     throw new GameError("That contestant isn't in the current pair.");
   }
-  const signedIn = "playerId" in person;
+  const signedIn = isSignedIn(person);
   if (!signedIn) await claimSignedOutPick(db, person, { now, ip });
   const [picked] = check<{ claimed: boolean; rated: boolean }[]>(
     await db.rpc("pick_infinite_pair", {
       p_pair_id: row.id,
-      p_player_id: signedIn ? person.playerId : null,
-      p_visitor_id: signedIn ? null : person.visitorId,
+      ...personParams(person),
       p_winner_id: winnerId,
       p_day: allowanceDay(now),
       p_allowance: signedIn ? await scopeAllowance(db, row.category_id) : 0,
@@ -698,12 +710,11 @@ export async function skipInfinitePair(
 ): Promise<void> {
   await requireNotBanned(db, person);
   const row = await requireOfferedPair(db, person, pairId);
-  const signedIn = "playerId" in person;
+  const signedIn = isSignedIn(person);
   const [skipped] = check<{ outcome: "skipped" | "gone" | "out-of-skips" }[]>(
     await db.rpc("skip_infinite_pair", {
       p_pair_id: row.id,
-      p_player_id: signedIn ? person.playerId : null,
-      p_visitor_id: signedIn ? null : person.visitorId,
+      ...personParams(person),
       p_day: allowanceDay(now),
       p_allowance: signedIn ? await scopeAllowance(db, row.category_id) : 0,
       p_skip_limit: RATED_SKIPS_PER_DAY,

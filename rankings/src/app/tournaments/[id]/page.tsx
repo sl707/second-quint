@@ -5,7 +5,7 @@ import { notFound } from "next/navigation";
 import { roundName, THIRD_PLACE_MATCH } from "@/domain/tournament/stage";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { readPerson } from "@/lib/session";
-import { getTournament, isBanned, type ContestantCard } from "@/server/game";
+import { getTournament, isBanned, isSignedIn, type ContestantCard } from "@/server/game";
 import { isVisitorVerified } from "@/server/human-check";
 import { HumanCheck } from "../../human-check";
 import { giveUpTournamentAction, undoLastPickAction } from "../actions";
@@ -24,7 +24,7 @@ export default async function TournamentPage({ params }: PageProps<"/tournaments
   const left = bracket.matchesLeft;
   const banned = await isBanned(createAdminClient(), person);
   const playable = tournament.status === "in_progress" && !banned;
-  const needsHumanCheck = !!person && "visitorId" in person && !(await isVisitorVerified(createAdminClient(), person));
+  const needsHumanCheck = !!person && !isSignedIn(person) && !(await isVisitorVerified(createAdminClient(), person));
 
   return (
     <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-6 px-4 py-5 md:px-8 md:py-8">

@@ -4,7 +4,7 @@ import { notFound } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { readPerson } from "@/lib/session";
 import { RATED_SKIPS_PER_DAY } from "@/domain/allowance/allowance";
-import { GameError, getInfinitePair, type InfinitePair } from "@/server/game";
+import { GameError, getInfinitePair, isSignedIn, type InfinitePair } from "@/server/game";
 import { isVisitorVerified } from "@/server/human-check";
 import { HumanCheck } from "../../human-check";
 import { startInfiniteModeAction } from "../actions";
@@ -31,7 +31,7 @@ export default async function InfiniteModePage({ params, searchParams }: PagePro
     }
   }
 
-  const needsHumanCheck = !!person && "visitorId" in person && !(await isVisitorVerified(createAdminClient(), person));
+  const needsHumanCheck = !!person && !isSignedIn(person) && !(await isVisitorVerified(createAdminClient(), person));
 
   return (
     <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-6 px-4 py-5 md:px-8 md:py-8">

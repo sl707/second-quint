@@ -6,7 +6,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { ensurePerson, readPerson } from "@/lib/session";
 import { readClientIp } from "@/lib/visitor";
 import { GameError, giveUpTournament, pickWinner, startTournament, undoLastPick } from "@/server/game";
-import { SignedOutPlayError } from "@/server/human-check";
+import { play } from "../play";
 
 export type StartTournamentState = { error: string | null };
 
@@ -34,19 +34,6 @@ export async function startTournamentAction(_: StartTournamentState, form: FormD
   redirect(`/tournaments/${tournamentId}`);
 }
 
-/**
- * Runs a play action, ignoring broken rules from stale screens (a repeated tap, another tab); the
- * refresh shows the truth. Refusals by the signed-out human check or rate limit are passed on.
- */
-async function play(action: () => Promise<void>) {
-  try {
-    await action();
-  } catch (error) {
-    if (!(error instanceof GameError) || error instanceof SignedOutPlayError) throw error;
-  }
-  refresh();
-}
-
 /** Why the last pick wasn't taken, when the signed-out human check or rate limit refused it. */
 export type PickState = { message: string | null };
 
@@ -57,14 +44,7 @@ export async function pickWinnerAction(_: PickState, form: FormData): Promise<Pi
   const matchIndex = Number(form.get("matchIndex"));
   const winnerId = String(form.get("winnerId") ?? "");
   const ip = await readClientIp();
-  try {
-    await play(() => pickWinner(createAdminClient(), person, tournamentId, winnerId, { matchIndex, ip }));
-  } catch (error) {
-    if (!(error instanceof SignedOutPlayError)) throw error;
-    refresh();
-    return { message: error.message };
-  }
-  return { message: null };
+  return { message: await play(() => pickWinner(createAdminClient(), person, tournamentId, winnerId, { matchIndex, ip })) };
 }
 
 export async function undoLastPickAction(tournamentId: string) {

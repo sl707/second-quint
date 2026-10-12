@@ -1,12 +1,11 @@
 "use server";
 
-import { refresh } from "next/cache";
 import { redirect } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { ensurePerson, readPerson } from "@/lib/session";
 import { readClientIp } from "@/lib/visitor";
-import { GameError, pickInfiniteWinner, skipInfinitePair } from "@/server/game";
-import { SignedOutPlayError } from "@/server/human-check";
+import { isSignedIn, pickInfiniteWinner, skipInfinitePair } from "@/server/game";
+import { play } from "../play";
 
 /**
  * Gives a signed-out browser its visitor ID, then opens Infinite Mode on the form's scope ("all" or
@@ -15,7 +14,7 @@ import { SignedOutPlayError } from "@/server/human-check";
 export async function startInfiniteModeAction(form: FormData) {
   const person = await ensurePerson();
   const scope = encodeURIComponent(String(form.get("scope") ?? "all"));
-  const unrated = "playerId" in person && form.get("unrated") !== null;
+  const unrated = isSignedIn(person) && form.get("unrated") !== null;
   redirect(`/infinite/${scope}${unrated ? "?play=unrated" : ""}`);
 }
 
@@ -28,12 +27,15 @@ export async function playInfiniteAction(state: InfinitePlayState, form: FormDat
   if (!person) return state;
   const pairId = String(form.get("pairId") ?? "");
   const winnerId = form.get("winnerId");
-  let next: InfinitePlayState;
-  try {
-    if (winnerId === null) {
-      await skipInfinitePair(createAdminClient(), person, { pairId });
-      next = { message: "Skipped.", picks: state.picks };
-    } else {
+  let next: InfinitePlayState = { message: null, picks: state.picks };
+  // A skip is refused when the rated skips are used up, which the player needs to be told.
+  const refusal = await play(
+    async () => {
+      if (winnerId === null) {
+        await skipInfinitePair(createAdminClient(), person, { pairId });
+        next = { message: "Skipped.", picks: state.picks };
+        return;
+      }
       const { rated } = await pickInfiniteWinner(
         createAdminClient(),
         person,
@@ -48,15 +50,8 @@ export async function playInfiniteAction(state: InfinitePlayState, form: FormDat
         message: `You picked ${form.get("winnerName")} over ${form.get("loserName")}.${lastRated}`,
         picks: state.picks + 1,
       };
-    }
-  } catch (error) {
-    if (!(error instanceof GameError)) throw error;
-    // A repeated tap or another tab; the refresh shows the pair that's actually offered. A skip can
-    // also be refused when the rated skips are used up, and a signed-out pick by the human check or
-    // the rate limit.
-    const shown = winnerId === null || error instanceof SignedOutPlayError;
-    next = { message: shown ? error.message : null, picks: state.picks };
-  }
-  refresh();
-  return next;
+    },
+    { showRefusals: winnerId === null },
+  );
+  return refusal === null ? next : { message: refusal, picks: state.picks };
 }

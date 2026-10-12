@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { readPerson } from "@/lib/session";
-import { getAllowanceStatus, listScopeContestants, listTournamentScopes, listUnfinishedTournaments } from "@/server/game";
+import { getAllowanceStatus, isSignedIn, listScopeContestants, listTournamentScopes, listUnfinishedTournaments } from "@/server/game";
 import { UnfinishedTournaments } from "../../unfinished-tournaments";
 import { NewTournamentForm, type AllowanceView, type PickingView } from "./new-tournament-form";
 
@@ -16,7 +16,7 @@ export default async function NewTournamentPage({ searchParams }: PageProps<"/to
   const [scopes, unfinished, status] = await Promise.all([
     listTournamentScopes(db),
     person ? listUnfinishedTournaments(db, person) : [],
-    person && "playerId" in person ? getAllowanceStatus(db, person, { now }) : null,
+    person && isSignedIn(person) ? getAllowanceStatus(db, person, { now }) : null,
   ]);
   const pickScope = scopes.find((s) => s.sizes && (s.categoryId ?? "all") === pick);
   const picking: PickingView | null = pickScope

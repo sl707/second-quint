@@ -9,7 +9,7 @@ import {
   MAX_REPORT_REASON_LENGTH,
 } from "@/domain/catalog/permissions";
 import { MAX_STORED_PICTURE_BYTES, storedPictureType } from "@/domain/picture/picture";
-import type { ContestantCard, Person, SignedInPlayer } from "@/server/game";
+import { isSignedIn, personIds, type ContestantCard, type Person, type SignedInPlayer } from "@/server/game";
 import { type CopiedPicture, fetchPictureFromLink, PictureLinkError, type PictureLinkOptions } from "@/server/picture-link";
 
 /** Who added a contestant or category: a player, "deleted" once they've deleted their account, or null for sample entries. */
@@ -556,11 +556,12 @@ export async function reportItem(db: SupabaseClient, person: Person, target: Rep
     UUID.test(target.id) &&
     !!check(await db.from(table).select("id").eq("id", target.id).maybeSingle());
   if (!exists) throw new CatalogError("That doesn't exist any more.");
-  if ("playerId" in person && (await findActor(db, person))?.banned) throw new CatalogError("Banned players can't report.");
+  if (isSignedIn(person) && (await findActor(db, person))?.banned) throw new CatalogError("Banned players can't report.");
 
+  const { playerId, visitorId } = personIds(person);
   const { error } = await db.from("reports").insert({
-    reporter_player_id: "playerId" in person ? person.playerId : null,
-    reporter_visitor_id: "visitorId" in person ? person.visitorId : null,
+    reporter_player_id: playerId,
+    reporter_visitor_id: visitorId,
     target_type: target.type,
     target_id: target.id,
     reason,
