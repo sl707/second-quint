@@ -20,6 +20,17 @@ Scripts live in `rankings/scripts/ops/`. Every workflow also has a "Run workflow
    - Specify bucket(s): only `second-quint-rankings-backups`
    - TTL: Forever
 5. Copy the **Access Key ID** and **Secret Access Key** now; the secret is shown once.
+6. **Budget alert** (Cloudflare has no hard spending cap, only alerts): **Manage Account → Billing → Billable Usage → Create budget alert**, threshold at the lowest amount it accepts (for example $1), your email as recipient. If Cloudflare already created a default $10 alert, lower it.
+
+### R2 spend guardrails
+
+R2 has no spending cap, so staying at $0 is enforced in layers:
+
+- **Only one writer.** The token above can touch only this bucket, and only the backup job uses it. Public access stays off, and Cloudflare doesn't bill requests it rejects as unauthorized.
+- **Hard limit in the job.** Before uploading, `backup.sh` adds the bucket's current size, the new dump, and every picture (as if all were re-uploaded). If that passes **8 GB** (80% of the free 10 GB), or a run would touch over 100,000 pictures, it uploads nothing, exits with an error, and the workflow opens a "Rankings backup failed" issue, which GitHub emails you.
+- **Bounded by design.** The database can't exceed Supabase's free 500 MB, dumps are gzipped, and only 8 weeks are kept; old backups are pruned *before* each upload. A weekly run makes a few thousand Class A operations at most, against 1 million free a month.
+- **Standard storage only.** The free tier doesn't cover Infrequent Access; never add lifecycle rules that move objects there.
+- **Budget alert** (step 6) as the last line: an email the day after any charge appears.
 
 ## 2. Collect the Supabase values
 
