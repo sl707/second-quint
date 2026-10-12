@@ -3,7 +3,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { readVisitor } from "@/lib/visitor";
+import { readPerson } from "@/lib/session";
 import { getTournament, type ContestantCard, type Tournament } from "@/server/game";
 import { pickWinnerAction, undoLastPickAction } from "../actions";
 import { BracketView, roundName } from "./bracket-view";
@@ -12,8 +12,8 @@ export const metadata: Metadata = { title: "Tournament" };
 
 export default async function TournamentPage({ params }: PageProps<"/tournaments/[id]">) {
   const { id } = await params;
-  const visitor = await readVisitor();
-  const tournament = visitor ? await getTournament(createAdminClient(), visitor, id).catch(() => null) : null;
+  const person = await readPerson();
+  const tournament = person ? await getTournament(createAdminClient(), person, id).catch(() => null) : null;
   if (!tournament) notFound();
 
   const { bracket } = tournament;

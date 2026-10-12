@@ -3,7 +3,7 @@
 import { refresh } from "next/cache";
 import { redirect } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { ensureVisitor, readVisitor } from "@/lib/visitor";
+import { ensurePerson, readPerson } from "@/lib/session";
 import { GameError, pickWinner, startTournament, undoLastPick } from "@/server/game";
 
 export type StartTournamentState = { error: string | null };
@@ -13,7 +13,7 @@ export async function startTournamentAction(_: StartTournamentState, form: FormD
   const size = Number(form.get("size"));
   let tournamentId: string;
   try {
-    ({ tournamentId } = await startTournament(createAdminClient(), await ensureVisitor(), {
+    ({ tournamentId } = await startTournament(createAdminClient(), await ensurePerson(), {
       categoryId: scope === "all" ? null : scope,
       size,
     }));
@@ -35,13 +35,13 @@ async function play(action: () => Promise<void>) {
 }
 
 export async function pickWinnerAction(tournamentId: string, matchIndex: number, winnerId: string) {
-  const visitor = await readVisitor();
-  if (!visitor) return;
-  await play(() => pickWinner(createAdminClient(), visitor, tournamentId, winnerId, { matchIndex }));
+  const person = await readPerson();
+  if (!person) return;
+  await play(() => pickWinner(createAdminClient(), person, tournamentId, winnerId, { matchIndex }));
 }
 
 export async function undoLastPickAction(tournamentId: string) {
-  const visitor = await readVisitor();
-  if (!visitor) return;
-  await play(() => undoLastPick(createAdminClient(), visitor, tournamentId));
+  const person = await readPerson();
+  if (!person) return;
+  await play(() => undoLastPick(createAdminClient(), person, tournamentId));
 }

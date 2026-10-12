@@ -6,7 +6,7 @@ import { startTournamentAction } from "../actions";
 
 const scopeValue = (scope: ScopeOption) => scope.categoryId ?? "all";
 
-export function NewTournamentForm({ scopes }: { scopes: ScopeOption[] }) {
+export function NewTournamentForm({ scopes, signedIn }: { scopes: ScopeOption[]; signedIn: boolean }) {
   const [state, action, pending] = useActionState(startTournamentAction, { error: null });
   const firstPlayable = scopes.find((s) => s.sizes) ?? scopes[0];
   const [selected, setSelected] = useState(firstPlayable ? scopeValue(firstPlayable) : "");
@@ -72,7 +72,11 @@ export function NewTournamentForm({ scopes }: { scopes: ScopeOption[] }) {
         </p>
       )}
 
-      <p className="text-sm text-zinc-500">You&apos;re signed out, so this tournament will be unrated.</p>
+      <p className="text-sm text-zinc-500">
+        {signedIn
+          ? "Rated tournaments aren't available yet, so this tournament will be unrated."
+          : "You're signed out, so this tournament will be unrated."}
+      </p>
 
       <button
         type="submit"

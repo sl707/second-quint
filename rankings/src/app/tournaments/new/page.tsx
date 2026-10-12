@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { readVisitor } from "@/lib/visitor";
+import { readPerson } from "@/lib/session";
 import { listTournamentScopes, listUnfinishedTournaments } from "@/server/game";
 import { NewTournamentForm } from "./new-tournament-form";
 
@@ -9,10 +9,10 @@ export const metadata: Metadata = { title: "New tournament" };
 
 export default async function NewTournamentPage() {
   const db = createAdminClient();
-  const visitor = await readVisitor();
+  const person = await readPerson();
   const [scopes, unfinished] = await Promise.all([
     listTournamentScopes(db),
-    visitor ? listUnfinishedTournaments(db, visitor) : [],
+    person ? listUnfinishedTournaments(db, person) : [],
   ]);
 
   return (
@@ -50,7 +50,7 @@ export default async function NewTournamentPage() {
         </section>
       )}
 
-      <NewTournamentForm scopes={scopes} />
+      <NewTournamentForm scopes={scopes} signedIn={person !== null && "playerId" in person} />
     </main>
   );
 }

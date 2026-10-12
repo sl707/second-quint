@@ -5,6 +5,24 @@ import { tournamentSizeOptions, type TournamentSizeOptions } from "@/domain/tour
 /** A signed-out visitor, known by the anonymous visitor ID kept in their browser. */
 export type Visitor = { visitorId: string };
 
+/** A signed-in player, known by their player ID. */
+export type SignedInPlayer = { playerId: string };
+
+/** Whoever is playing: their tournaments and matches are stored against them. */
+export type Person = Visitor | SignedInPlayer;
+
+/** The row filter that matches what `person` owns. */
+function ownedBy(person: Person): Record<string, string> {
+  return "playerId" in person ? { player_id: person.playerId } : { visitor_id: person.visitorId };
+}
+
+/** The owner columns to store on a new tournament or match. */
+function ownerColumns(person: Person) {
+  return "playerId" in person
+    ? { player_id: person.playerId, visitor_id: null }
+    : { player_id: null, visitor_id: person.visitorId };
+}
+
 /** A category ID, or null for all contestants. */
 export type ScopeId = string | null;
 
@@ -99,7 +117,7 @@ export async function listTournamentScopes(db: SupabaseClient): Promise<ScopeOpt
 
 export async function startTournament(
   db: SupabaseClient,
-  visitor: Visitor,
+  person: Person,
   options: { categoryId: ScopeId; size?: number },
   random: Random = Math.random,
 ): Promise<{ tournamentId: string }> {
@@ -116,7 +134,7 @@ export async function startTournament(
     await db
       .from("tournaments")
       .insert({
-        visitor_id: visitor.visitorId,
+        ...ownerColumns(person),
         category_id: options.categoryId,
         size,
         bracket: { slots: drawBracket(scope, size, random) },
@@ -138,13 +156,13 @@ type TournamentRow = {
   created_at: string;
 };
 
-async function loadOwnTournament(db: SupabaseClient, visitor: Visitor, tournamentId: string) {
+async function loadOwnTournament(db: SupabaseClient, person: Person, tournamentId: string) {
   const row = check(
     await db
       .from("tournaments")
       .select("id, category_id, size, rated, status, bracket, can_undo, created_at")
       .eq("id", tournamentId)
-      .eq("visitor_id", visitor.visitorId)
+      .match(ownedBy(person))
       .maybeSingle(),
   ) as TournamentRow | null;
   if (!row) return null;
@@ -158,9 +176,9 @@ async function loadOwnTournament(db: SupabaseClient, visitor: Visitor, tournamen
   return { row, bracket: playBracket(row.bracket.slots, picks) };
 }
 
-/** The visitor's tournament with its bracket replayed, or null if it isn't theirs. */
-export async function getTournament(db: SupabaseClient, visitor: Visitor, tournamentId: string): Promise<Tournament | null> {
-  const loaded = await loadOwnTournament(db, visitor, tournamentId);
+/** The person's tournament with its bracket replayed, or null if it isn't theirs. */
+export async function getTournament(db: SupabaseClient, person: Person, tournamentId: string): Promise<Tournament | null> {
+  const loaded = await loadOwnTournament(db, person, tournamentId);
   if (!loaded) return null;
   const { row, bracket } = loaded;
 
@@ -185,24 +203,24 @@ export async function getTournament(db: SupabaseClient, visitor: Visitor, tourna
   };
 }
 
-async function requireOwnTournament(db: SupabaseClient, visitor: Visitor, tournamentId: string) {
-  const loaded = await loadOwnTournament(db, visitor, tournamentId);
+async function requireOwnTournament(db: SupabaseClient, person: Person, tournamentId: string) {
+  const loaded = await loadOwnTournament(db, person, tournamentId);
   if (!loaded) throw new GameError("That tournament doesn't exist.");
   return loaded;
 }
 
 /**
- * Records the visitor's pick for the tournament's next match. Passing the `matchIndex` the visitor
- * was shown guards against a repeated tap landing on the following match.
+ * Records the person's pick for the tournament's next match. Passing the `matchIndex` they
+ * were shown guards against a repeated tap landing on the following match.
  */
 export async function pickWinner(
   db: SupabaseClient,
-  visitor: Visitor,
+  person: Person,
   tournamentId: string,
   winnerId: string,
   options: { matchIndex?: number } = {},
 ): Promise<void> {
-  const { row, bracket } = await requireOwnTournament(db, visitor, tournamentId);
+  const { row, bracket } = await requireOwnTournament(db, person, tournamentId);
   const next = bracket.next;
   if (row.status !== "in_progress" || !next) throw new GameError("This tournament has no match left to pick.");
   if (options.matchIndex !== undefined && options.matchIndex !== next.index) {
@@ -214,7 +232,7 @@ export async function pickWinner(
     winner_id: winnerId,
     loser_id: next.contestantIds[0] === winnerId ? next.contestantIds[1] : next.contestantIds[0],
     category_id: row.category_id,
-    visitor_id: visitor.visitorId,
+    ...ownerColumns(person),
     rated: row.rated,
     tournament_id: row.id,
     round: next.round,
@@ -236,9 +254,9 @@ export async function pickWinner(
   );
 }
 
-/** Takes back the visitor's most recent pick, once, as long as they haven't picked the next match. */
-export async function undoLastPick(db: SupabaseClient, visitor: Visitor, tournamentId: string): Promise<void> {
-  const { row, bracket } = await requireOwnTournament(db, visitor, tournamentId);
+/** Takes back the person's most recent pick, once, as long as they haven't picked the next match. */
+export async function undoLastPick(db: SupabaseClient, person: Person, tournamentId: string): Promise<void> {
+  const { row, bracket } = await requireOwnTournament(db, person, tournamentId);
   if (!row.can_undo || bracket.matchesPlayed === 0 || row.status === "given_up") {
     throw new GameError("There's no pick to undo.");
   }
@@ -262,13 +280,13 @@ export async function undoLastPick(db: SupabaseClient, visitor: Visitor, tournam
   );
 }
 
-/** The visitor's tournaments still in progress, newest first, so they can pick up where they left off. */
-export async function listUnfinishedTournaments(db: SupabaseClient, visitor: Visitor): Promise<UnfinishedTournament[]> {
+/** The person's tournaments still in progress, newest first, so they can pick up where they left off. */
+export async function listUnfinishedTournaments(db: SupabaseClient, person: Person): Promise<UnfinishedTournament[]> {
   const rows = check(
     await db
       .from("tournaments")
       .select("id, size, created_at, categories(name), matches(count)")
-      .eq("visitor_id", visitor.visitorId)
+      .match(ownedBy(person))
       .eq("status", "in_progress")
       .order("created_at", { ascending: false }),
   ) as unknown as {
