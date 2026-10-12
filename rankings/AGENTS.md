@@ -27,6 +27,8 @@ Spec: `../.scratch/rankings/spec.md`. Tickets: `../.scratch/rankings/issues/`. V
 - `src/app/`: pages, route handlers, and server actions; thin wrappers over `src/server/`
 - `src/lib/supabase/`: `createVisitorClient()` (acts as the visitor, respects row-level security) and `createAdminClient()` (server-only, full access)
 
+- `src/lib/session.ts`: who is playing. `readPerson()` / `ensurePerson()` give the signed-in player or the signed-out visitor; game service functions take either (`Person`). `src/proxy.ts` refreshes the Supabase session cookies.
+
 `cacheComponents` is off: pages render dynamically.
 
 ### Environment variables
@@ -46,4 +48,4 @@ The ranking refresher (`refreshGlobalRankings` in `src/server/rankings.ts`) reco
 
 - **Unit** (`npm test`): `src/**/*.test.ts`, pure domain code, including the ranking calculation
 - **Service** (`npm run test:service`): `tests/service/**/*.test.ts`, calls `src/server/` against the local Supabase; files run one at a time
-- **Browser** (`npm run test:e2e`): `e2e/*.spec.ts`, Playwright at a phone viewport against a production build; keep these few and about wiring, not rules
+- **Browser** (`npm run test:e2e`): `e2e/*.spec.ts`, Playwright at a phone viewport against a production build; keep these few and about wiring, not rules. `e2e/auth-stub.ts` signs a browser in without Google (admin-issued magic link), so the app has no test-only sign-in route

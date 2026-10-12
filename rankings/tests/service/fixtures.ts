@@ -55,11 +55,41 @@ export async function recordMatch(
   if (error) throw error;
 }
 
+const users: string[] = [];
+
+/** Creates a Google-like auth user with a real-looking name and email, as sign-in would. */
+export async function newUser(db: SupabaseClient) {
+  const tag = randomUUID().slice(0, 8);
+  const { data, error } = await db.auth.admin.createUser({
+    email: `test-${tag}@example.test`,
+    email_confirm: true,
+    user_metadata: { full_name: `Real Name ${tag}` },
+  });
+  if (error) throw error;
+  users.push(data.user.id);
+  return { userId: data.user.id, email: data.user.email!, fullName: `Real Name ${tag}` };
+}
+
+/** A display name no other test run has taken. */
+export function uniqueDisplayName(prefix = "test") {
+  return `${prefix}_${randomUUID().slice(0, 8)}`;
+}
+
 /** Removes everything the fixtures created, so the all-contestants scope doesn't keep growing. */
 export async function removeTestData(db: SupabaseClient) {
   if (visitors.length) {
     await db.from("matches").delete().in("visitor_id", visitors);
     await db.from("tournaments").delete().in("visitor_id", visitors);
+  }
+  if (users.length) {
+    const { data: players } = await db.from("players").select("id").in("user_id", users);
+    const playerIds = (players ?? []).map((p) => p.id as string);
+    if (playerIds.length) {
+      await db.from("matches").delete().in("player_id", playerIds);
+      await db.from("tournaments").delete().in("player_id", playerIds);
+      await db.from("players").delete().in("id", playerIds);
+    }
+    for (const id of users.splice(0)) await db.auth.admin.deleteUser(id);
   }
   await db.from("contestants").delete().like("name", "Test %");
   await db.from("categories").delete().like("name", "Test category %");

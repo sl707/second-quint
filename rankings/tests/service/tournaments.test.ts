@@ -1,7 +1,8 @@
 import { afterAll, describe, expect, it } from "vitest";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { GameError, getTournament, listTournamentScopes, listUnfinishedTournaments, pickWinner, startTournament, undoLastPick, type Visitor } from "@/server/game";
-import { createCategory, newVisitor, removeTestData } from "./fixtures";
+import { GameError, getTournament, listTournamentScopes, listUnfinishedTournaments, pickWinner, startTournament, undoLastPick, type Person } from "@/server/game";
+import { chooseDisplayName } from "@/server/profiles";
+import { createCategory, newUser, newVisitor, removeTestData, uniqueDisplayName } from "./fixtures";
 
 const db = createAdminClient();
 
@@ -71,7 +72,7 @@ describe("starting a tournament", () => {
 });
 
 /** Picks the first contestant of the next match. */
-async function pickNext(visitor: Visitor, tournamentId: string) {
+async function pickNext(visitor: Person, tournamentId: string) {
   const tournament = await getTournament(db, visitor, tournamentId);
   const winnerId = tournament!.bracket.next!.contestantIds[0];
   await pickWinner(db, visitor, tournamentId, winnerId);
@@ -244,5 +245,38 @@ describe("resuming", () => {
       [newer.tournamentId, 4],
       [older.tournamentId, 3],
     ]);
+  });
+});
+
+describe("playing signed in", () => {
+  async function newPlayer() {
+    const player = await chooseDisplayName(db, (await newUser(db)).userId, uniqueDisplayName());
+    return { playerId: player.id };
+  }
+
+  it("stores the tournament and its matches with the player instead of a visitor ID", async () => {
+    const { categoryId } = await createCategory(db, 4);
+    const player = await newPlayer();
+    const { tournamentId } = await startTournament(db, player, { categoryId });
+    await pickNext(player, tournamentId);
+
+    const { data: tournament } = await db.from("tournaments").select("player_id, visitor_id").eq("id", tournamentId).single();
+    expect(tournament).toEqual({ player_id: player.playerId, visitor_id: null });
+    const { data: matches } = await db.from("matches").select("player_id, visitor_id").eq("tournament_id", tournamentId);
+    expect(matches).toEqual([{ player_id: player.playerId, visitor_id: null }]);
+  });
+
+  it("keeps the player's tournaments to that player, with undo and resuming", async () => {
+    const { categoryId } = await createCategory(db, 4);
+    const player = await newPlayer();
+    const { tournamentId } = await startTournament(db, player, { categoryId });
+    await pickNext(player, tournamentId);
+    await pickNext(player, tournamentId);
+    await undoLastPick(db, player, tournamentId);
+
+    expect((await getTournament(db, player, tournamentId))?.bracket.matchesPlayed).toBe(1);
+    expect(await listUnfinishedTournaments(db, player)).toEqual([expect.objectContaining({ id: tournamentId, matchesLeft: 3 })]);
+    expect(await getTournament(db, await newPlayer(), tournamentId)).toBeNull();
+    expect(await getTournament(db, newVisitor(), tournamentId)).toBeNull();
   });
 });
