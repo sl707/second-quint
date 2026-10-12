@@ -7,7 +7,7 @@ import { safeNextPath } from "@/lib/pathname";
 import { getSession } from "@/lib/session";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createVisitorClient } from "@/lib/supabase/server";
-import { deleteAccount } from "@/server/profiles";
+import { deleteAccount, ProfileError } from "@/server/profiles";
 
 /** Sends the browser to Google; it comes back through /auth/callback. */
 export async function signInWithGoogleAction(form: FormData) {
@@ -36,7 +36,12 @@ export async function deleteAccountAction(_: DeleteAccountState, form: FormData)
     return { error: `Type ${player.displayName} to confirm.` };
   }
 
-  await deleteAccount(createAdminClient(), { playerId: player.id });
+  try {
+    await deleteAccount(createAdminClient(), { playerId: player.id });
+  } catch (error) {
+    if (error instanceof ProfileError) return { error: error.message };
+    throw error;
+  }
   // The auth user is gone, so only the session cookies are left to clear.
   await (await createVisitorClient()).auth.signOut({ scope: "local" });
   revalidatePath("/", "layout");

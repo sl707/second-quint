@@ -171,6 +171,30 @@ describe("deleting an account", () => {
     expect((await chooseDisplayName(db, returning.userId, player.displayName)).displayName).toBe(player.displayName);
   });
 
+  it("won't let the only admin delete their account until there's another admin", async () => {
+    const admin = await newPlayer(db);
+    const { data: others } = await db.from("players").select("id").eq("is_admin", true);
+    await db.from("players").update({ is_admin: false }).in("id", others!.map((p) => p.id));
+    try {
+      await makeAdmin(db, admin.playerId);
+      const onlyAdmin = new ProfileError("You're the only admin. Make another player the admin before deleting your account.");
+      await expect(deleteAccount(db, admin)).rejects.toThrow(onlyAdmin);
+      expect(await getProfile(db, admin.playerId)).not.toBeNull();
+
+      // A banned admin isn't an admin.
+      const second = await newPlayer(db);
+      await makeAdmin(db, second.playerId);
+      await banPlayer(db, admin, second.playerId, { removeMatches: false });
+      await expect(deleteAccount(db, admin)).rejects.toThrow(onlyAdmin);
+
+      await makeAdmin(db, (await newPlayer(db)).playerId);
+      await deleteAccount(db, admin);
+      expect(await getProfile(db, admin.playerId)).toBeNull();
+    } finally {
+      await db.from("players").update({ is_admin: true }).in("id", others!.map((p) => p.id));
+    }
+  });
+
   it("refuses an account that doesn't exist", async () => {
     const player = await newPlayer(db);
     await deleteAccount(db, player);

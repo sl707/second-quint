@@ -51,13 +51,18 @@ export async function chooseDisplayName(db: SupabaseClient, userId: string, inpu
 /**
  * Deletes the player's account: their profile, display name, tournaments, and personal rankings go,
  * and so does their auth user (with their email). Their matches keep counting in global rankings and
- * their contestants and categories stay, all credited to an anonymous deleted player.
+ * their contestants and categories stay, all credited to an anonymous deleted player. The only
+ * admin can't delete their account.
  */
 export async function deleteAccount(db: SupabaseClient, player: SignedInPlayer): Promise<void> {
-  const userId = check(await db.rpc("delete_player_account", { p_player_id: player.playerId })) as string | null;
+  const { data, error } = await db.rpc("delete_player_account", { p_player_id: player.playerId });
+  if (error?.message === "only_admin") {
+    throw new ProfileError("You're the only admin. Make another player the admin before deleting your account.");
+  }
+  const userId = check({ data, error }) as string | null;
   if (!userId) throw new ProfileError("That account doesn't exist.");
-  const { error } = await db.auth.admin.deleteUser(userId);
-  if (error) throw error;
+  const deleted = await db.auth.admin.deleteUser(userId);
+  if (deleted.error) throw deleted.error;
 }
 
 /** How many players a search lists at once, by display name. */
