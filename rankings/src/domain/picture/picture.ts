@@ -1,6 +1,6 @@
 /**
  * Picture rules shared by the browser upload and any server-side import: which files are
- * accepted, and how each is cut down to the stored center-cropped squares.
+ * accepted, and how each is cut down to the stored squares (center-cropped for uploads).
  */
 
 export const ACCEPTED_PICTURE_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif"] as const;
@@ -33,6 +33,15 @@ export function checkPictureFile(file: { type: string; size: number }): PictureC
 export function centerSquareCrop(width: number, height: number): { left: number; top: number; size: number } {
   const size = Math.min(width, height);
   return { left: Math.floor((width - size) / 2), top: Math.floor((height - size) / 2), size };
+}
+
+/**
+ * The largest square inside a `width` × `height` picture, centered across but kept at the top,
+ * where a character's face usually is in portrait art. Used by bulk imports of character art.
+ */
+export function topSquareCrop(width: number, height: number): { left: number; top: number; size: number } {
+  const size = Math.min(width, height);
+  return { left: Math.floor((width - size) / 2), top: 0, size };
 }
 
 export type AcceptedPictureType = (typeof ACCEPTED_PICTURE_TYPES)[number];

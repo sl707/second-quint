@@ -162,3 +162,21 @@ Signed-out picks need a passed Turnstile check (remembered for 24 hours per visi
 Local, test, and CI runs use Cloudflare's always-pass test keys (`1x00000000000000000000AA` / `1x0000000000000000000000000000000AA`), written to `.env.local` by `scripts/write-local-env.mjs`. To try a refusal locally, set `TURNSTILE_SECRET_KEY=2x0000000000000000000000000000000AA` (always fails).
 
 The rate limit's IP comes from `x-forwarded-for`, which Vercel sets and overwrites; behind another proxy that passes a client-supplied header through, the per-IP limit could be dodged (the per-visitor limit still holds). Rate-limit rows (`signed_out_picks`, with the IP) are pruned after a minute on the next signed-out pick; expired `visitor_verifications` rows are pruned on the next verification.
+
+## Importing the Waifu category
+
+Scripts in `rankings/scripts/waifus/` turn the owner's MyAnimeList anime and manga lists into contestants in the "Waifu" category. Everything they fetch or generate goes to `rankings/.cache/waifus/` (gitignored); every response is cached, so an interrupted or repeated run picks up where it left off. Each step prints its progress. Run from `rankings/`:
+
+1. `node scripts/waifus/fetch-mal.mjs widitidi` and `node scripts/waifus/fetch-mal.mjs widitidi --type manga`: the list, then each series' characters from AniList: every main character, plus supporting ones with at least `MIN_SUPPORTING_FAVOURITES` favourites (1; set in `lib.mjs`, used by steps 1 and 2). About 2 s per AniList request, so about an hour for 460 series. Delete `.cache/waifus/series/` (anime) or `manga/` to re-fetch after changing the threshold.
+2. `node scripts/waifus/candidates.mjs`: one candidate per AniList character across anime and manga, female only. Gender is AniList's; when that isn't plainly Male or Female, animecharactersdatabase.com is asked (1 request a second, matched by name and series). Still unknown: "unsure". `--min-favourites N` tries a higher threshold without re-fetching.
+3. `node scripts/waifus/pictures.mjs`: up to 3 official pictures from the series' Fandom wiki (found through Wikidata's MAL anime or manga ID, else by guessing the subdomain and checking the characters have pages there) plus the AniList picture, and an automatic pick.
+4. `node scripts/waifus/review.mjs`, then open `.cache/waifus/review.html` by double-click. Filter by series (labelled Anime or Manga), anime or manga, gender source, included or not, role, or favourites, or search; click a picture to choose it; tick include, or **Include/Exclude all shown** (pick a series first to do a whole series). Unsure ones start excluded. Then **Download choices** (`waifu-choices.json`). Choices are also saved in the browser; **Load choices** brings a downloaded file back.
+5. Import, idempotent by `source_id` (`anilist:<id>`): new characters are added, existing ones only joined to the category. Pictures are cropped toward the top (faces), 512 and 128 px WebP, stored like uploads. `--replace-pictures` re-does pictures of existing ones; `--limit N` and `--dry-run` for trying it out.
+   ```bash
+   node scripts/waifus/import.mjs --target local --added-by <displayName> --choices ~/Downloads/waifu-choices.json
+   # production: values from the environment only, never from a file in the repo
+   export NEXT_PUBLIC_SUPABASE_URL=https://<ref>.supabase.co
+   read -rs SUPABASE_SECRET_KEY && export SUPABASE_SECRET_KEY   # paste the secret key (Project Settings → API Keys)
+   node scripts/waifus/import.mjs --target production --added-by <displayName> --choices ~/Downloads/waifu-choices.json
+   ```
+   The player must exist (fails otherwise) and is recorded as adding the category and contestants. The import warns about new contestants whose names look like existing ones; merge those on `/admin`.

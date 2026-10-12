@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { centerSquareCrop, checkPictureFile, sniffPictureType, storedPictureType } from "./picture";
+import { centerSquareCrop, checkPictureFile, sniffPictureType, storedPictureType, topSquareCrop } from "./picture";
 
 const bytes = (...values: (number | string)[]) =>
   new Uint8Array(values.flatMap((v) => (typeof v === "string" ? [...v].map((c) => c.charCodeAt(0)) : [v])));
@@ -33,6 +33,16 @@ describe("center square crop", () => {
 
   it("keeps all of a square picture", () => {
     expect(centerSquareCrop(512, 512)).toEqual({ left: 0, top: 0, size: 512 });
+  });
+});
+
+describe("top square crop", () => {
+  it("keeps the top of a tall picture", () => {
+    expect(topSquareCrop(300, 501)).toEqual({ left: 0, top: 0, size: 300 });
+  });
+
+  it("keeps the middle of a wide picture", () => {
+    expect(topSquareCrop(1600, 900)).toEqual({ left: 350, top: 0, size: 900 });
   });
 });
 
