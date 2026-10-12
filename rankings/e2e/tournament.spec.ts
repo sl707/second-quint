@@ -7,6 +7,7 @@ test("a signed-out visitor plays a full tournament to its tournament ranking", a
   await page.getByRole("radio", { name: /Dog breeds/ }).check();
   await expect(page.getByLabel("Size")).toHaveValue("8");
   await page.getByLabel("Size").fill("5");
+  await expect(page.getByRole("status")).toContainText("This tournament will be unrated.You're signed out.");
   await page.getByRole("button", { name: "Start tournament" }).click();
 
   await expect(page.getByText("5 matches left")).toBeVisible();

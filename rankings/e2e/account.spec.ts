@@ -60,15 +60,27 @@ test("a new player picks a display name, sees their profile, plays signed in, an
   await page.goto("/tournaments/new");
   await page.getByRole("radio", { name: /Dog breeds/ }).check();
   await page.getByLabel("Size").fill("4");
+  await expect(page.getByRole("timer")).toHaveText(/^\d+h \d\dm \d\ds$/);
+  await expect(page.getByRole("radio", { name: /Dog breeds/ })).toHaveAccessibleName(/20 of 20 rated matches left today/);
+  await page.getByLabel("Play unrated").check();
+  await expect(page.getByRole("status")).toContainText("This tournament will be unrated.You chose to play unrated.");
+  await page.getByLabel("Play unrated").uncheck();
+  await expect(page.getByRole("status")).toContainText("This tournament will be rated.");
   await page.getByRole("button", { name: "Start tournament" }).click();
   await expect(page.getByText("4 matches left")).toBeVisible();
+  await expect(page.getByText("Rated", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: /^Pick / }).first().click();
   await expect(page.getByText("3 matches left")).toBeVisible();
 
   const tournamentId = page.url().split("/").pop()!;
   const { data: player } = await admin.from("players").select("id").eq("user_id", user.userId).single();
-  const { data: matches } = await admin.from("matches").select("player_id, visitor_id").eq("tournament_id", tournamentId);
-  expect(matches).toEqual([{ player_id: player!.id, visitor_id: null }]);
+  const { data: matches } = await admin.from("matches").select("player_id, visitor_id, rated").eq("tournament_id", tournamentId);
+  expect(matches).toEqual([{ player_id: player!.id, visitor_id: null, rated: true }]);
+
+  await page.goto("/tournaments/new");
+  await page.getByRole("radio", { name: /Dog breeds/ }).check();
+  await expect(page.getByRole("radio", { name: /Dog breeds/ })).toHaveAccessibleName(/16 of 20 rated matches left today/);
+  await expect(page.getByRole("status")).toContainText("You already have an unfinished rated tournament.");
 
   await page.getByRole("button", { name: "Sign out" }).click();
   await expect(page.getByRole("button", { name: "Sign in with Google" })).toBeVisible();

@@ -11,14 +11,21 @@ export type StartTournamentState = { error: string | null };
 export async function startTournamentAction(_: StartTournamentState, form: FormData): Promise<StartTournamentState> {
   const scope = String(form.get("scope") ?? "");
   const size = Number(form.get("size"));
+  // Start exactly what the player was told: rated, or unrated (never using allowance they didn't expect to spend).
+  const expectRated = form.get("expectRated") === "1";
   let tournamentId: string;
   try {
     ({ tournamentId } = await startTournament(createAdminClient(), await ensurePerson(), {
       categoryId: scope === "all" ? null : scope,
       size,
+      unrated: !expectRated,
+      expectRated,
     }));
   } catch (error) {
-    if (error instanceof GameError) return { error: error.message };
+    if (error instanceof GameError) {
+      refresh();
+      return { error: error.message };
+    }
     throw error;
   }
   redirect(`/tournaments/${tournamentId}`);

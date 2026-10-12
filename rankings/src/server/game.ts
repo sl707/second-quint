@@ -1,5 +1,8 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { allowanceDay, nextAllowanceReset, ratedAllowance } from "@/domain/allowance/allowance";
+import { unratedReasonMessage, type UnratedReason } from "@/domain/allowance/rated-status";
 import { drawBracket, playBracket, type BracketState, type Random, type Slot } from "@/domain/tournament/bracket";
+import { matchCountFor } from "@/domain/tournament/match-count";
 import { tournamentSizeOptions, type TournamentSizeOptions } from "@/domain/tournament/size";
 
 /** A signed-out visitor, known by the anonymous visitor ID kept in their browser. */
@@ -115,12 +118,29 @@ export async function listTournamentScopes(db: SupabaseClient): Promise<ScopeOpt
   ];
 }
 
+export type StartTournamentOptions = {
+  categoryId: ScopeId;
+  size?: number;
+  /** The signed-in player chose to play unrated. */
+  unrated?: boolean;
+  /** Start only if the tournament will be rated, as the player was told; otherwise throw and start nothing. */
+  expectRated?: boolean;
+  /** When the tournament starts, which decides the allowance day. */
+  now?: Date;
+};
+
+export type StartedTournament = { tournamentId: string; rated: boolean; unratedReason: UnratedReason | null };
+
+/**
+ * Draws and starts a tournament. It's rated when the rules allow (see `tournamentRatedStatus`), in
+ * which case all its matches are reserved against the start day's allowance in the scope.
+ */
 export async function startTournament(
   db: SupabaseClient,
   person: Person,
-  options: { categoryId: ScopeId; size?: number },
+  options: StartTournamentOptions,
   random: Random = Math.random,
-): Promise<{ tournamentId: string }> {
+): Promise<StartedTournament> {
   await scopeName(db, options.categoryId);
   const scope = await scopeContestantIds(db, options.categoryId);
   const sizes = tournamentSizeOptions(scope.length);
@@ -130,19 +150,87 @@ export async function startTournament(
     throw new GameError(`Tournament size must be from ${sizes.min} to ${sizes.max}.`);
   }
 
-  const tournament = check<{ id: string }>(
-    await db
-      .from("tournaments")
-      .insert({
-        ...ownerColumns(person),
-        category_id: options.categoryId,
-        size,
-        bracket: { slots: drawBracket(scope, size, random) },
-      })
-      .select("id")
-      .single(),
+  const signedIn = "playerId" in person;
+  const choseUnrated = signedIn && options.unrated === true;
+  const now = options.now ?? new Date();
+  const allowance = ratedAllowance({ allContestants: options.categoryId === null, contestantCount: scope.length });
+  const [started] = check<{ tournament_id: string | null; rated: boolean; unrated_reason: UnratedReason | null }[]>(
+    await db.rpc("start_tournament", {
+      p_player_id: signedIn ? person.playerId : null,
+      p_visitor_id: signedIn ? null : person.visitorId,
+      p_category_id: options.categoryId,
+      p_size: matchCountFor(size),
+      p_bracket: { slots: drawBracket(scope, size, random) },
+      p_try_rated: signedIn && !choseUnrated,
+      p_require_rated: options.expectRated === true,
+      p_day: allowanceDay(now),
+      p_allowance: allowance,
+    }),
   );
-  return { tournamentId: tournament.id };
+  const unratedReason: UnratedReason | null = started.rated
+    ? null
+    : !signedIn
+      ? "signed-out"
+      : choseUnrated
+        ? "chose-unrated"
+        : started.unrated_reason;
+  if (!started.tournament_id) {
+    const used = signedIn ? ((await usedAllowance(db, person, allowanceDay(now))).get(options.categoryId) ?? 0) : 0;
+    const message = unratedReasonMessage(unratedReason!, { size, remainingAllowance: Math.max(0, allowance - used) });
+    throw new GameError(`This tournament can't be rated now. ${message}`);
+  }
+  return { tournamentId: started.tournament_id, rated: started.rated, unratedReason };
+}
+
+/** Rated matches the player has used on `day`, by scope (null = all contestants). */
+async function usedAllowance(db: SupabaseClient, player: SignedInPlayer, day: string): Promise<Map<ScopeId, number>> {
+  const rows = check(
+    await db.from("allowance_use").select("category_id, used").eq("player_id", player.playerId).eq("day", day),
+  ) as { category_id: ScopeId; used: number }[];
+  return new Map(rows.map((r) => [r.category_id, r.used]));
+}
+
+export type ScopeAllowance = { categoryId: ScopeId; name: string; allowance: number; used: number; remaining: number };
+
+export type AllowanceStatus = {
+  /** The current allowance day, `YYYY-MM-DD` in New York. */
+  day: string;
+  /** When the allowance next resets (midnight in New York), as an ISO timestamp. */
+  resetsAt: string;
+  hasUnfinishedRatedTournament: boolean;
+  scopes: ScopeAllowance[];
+};
+
+/** The player's rated allowance today in every scope, and whether a rated tournament is unfinished. */
+export async function getAllowanceStatus(
+  db: SupabaseClient,
+  player: SignedInPlayer,
+  options: { now?: Date } = {},
+): Promise<AllowanceStatus> {
+  const now = options.now ?? new Date();
+  const day = allowanceDay(now);
+  const [scopes, used, unfinished] = await Promise.all([
+    listTournamentScopes(db),
+    usedAllowance(db, player, day),
+    db
+      .from("tournaments")
+      .select("id", { count: "exact", head: true })
+      .eq("player_id", player.playerId)
+      .eq("rated", true)
+      .eq("status", "in_progress"),
+  ]);
+  if (unfinished.error) throw unfinished.error;
+
+  return {
+    day,
+    resetsAt: nextAllowanceReset(now).toISOString(),
+    hasUnfinishedRatedTournament: (unfinished.count ?? 0) > 0,
+    scopes: scopes.map((s) => {
+      const allowance = ratedAllowance({ allContestants: s.categoryId === null, contestantCount: s.contestantCount });
+      const usedToday = used.get(s.categoryId) ?? 0;
+      return { categoryId: s.categoryId, name: s.name, allowance, used: usedToday, remaining: Math.max(0, allowance - usedToday) };
+    }),
+  };
 }
 
 type TournamentRow = {

@@ -2,18 +2,28 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { readPerson } from "@/lib/session";
-import { listTournamentScopes, listUnfinishedTournaments } from "@/server/game";
-import { NewTournamentForm } from "./new-tournament-form";
+import { getAllowanceStatus, listTournamentScopes, listUnfinishedTournaments } from "@/server/game";
+import { NewTournamentForm, type AllowanceView } from "./new-tournament-form";
 
 export const metadata: Metadata = { title: "New tournament" };
 
 export default async function NewTournamentPage() {
   const db = createAdminClient();
   const person = await readPerson();
-  const [scopes, unfinished] = await Promise.all([
+  const now = new Date();
+  const [scopes, unfinished, status] = await Promise.all([
     listTournamentScopes(db),
     person ? listUnfinishedTournaments(db, person) : [],
+    person && "playerId" in person ? getAllowanceStatus(db, person, { now }) : null,
   ]);
+  const allowance: AllowanceView | null = status && {
+    resetsAt: status.resetsAt,
+    renderedAt: now.toISOString(),
+    hasUnfinishedRatedTournament: status.hasUnfinishedRatedTournament,
+    remaining: Object.fromEntries(
+      status.scopes.map((s) => [s.categoryId ?? "all", { allowance: s.allowance, remaining: s.remaining }]),
+    ),
+  };
 
   return (
     <main className="mx-auto flex w-full max-w-xl flex-1 flex-col gap-8 px-5 py-8">
@@ -50,7 +60,7 @@ export default async function NewTournamentPage() {
         </section>
       )}
 
-      <NewTournamentForm scopes={scopes} signedIn={person !== null && "playerId" in person} />
+      <NewTournamentForm scopes={scopes} allowance={allowance} />
     </main>
   );
 }
