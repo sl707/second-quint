@@ -88,6 +88,19 @@ function check<T>({ data, error }: { data: T | null; error: unknown }): T {
   return data as T;
 }
 
+const BANNED = "Your account is banned, so you can't play.";
+
+/** Whether `person` is a banned player; signed-out visitors never are. */
+export async function isBanned(db: SupabaseClient, person: Person | null): Promise<boolean> {
+  if (!person || !("playerId" in person)) return false;
+  const row = check(await db.from("players").select("banned").eq("id", person.playerId).maybeSingle()) as { banned: boolean } | null;
+  return row?.banned ?? false;
+}
+
+async function requireNotBanned(db: SupabaseClient, person: Person): Promise<void> {
+  if (await isBanned(db, person)) throw new GameError(BANNED);
+}
+
 async function scopeContestantIds(db: SupabaseClient, categoryId: ScopeId): Promise<string[]> {
   const ids: string[] = [];
   for (let from = 0; ; from += PAGE) {
@@ -186,6 +199,7 @@ export async function startTournament(
   options: StartTournamentOptions,
   random: Random = Math.random,
 ): Promise<StartedTournament> {
+  await requireNotBanned(db, person);
   await scopeName(db, options.categoryId);
   const scope = await scopeContestantIds(db, options.categoryId);
   const sizes = tournamentSizeOptions(scope.length);
@@ -365,6 +379,7 @@ export async function pickWinner(
   winnerId: string,
   options: { matchIndex?: number } = {},
 ): Promise<void> {
+  await requireNotBanned(db, person);
   const { row, bracket } = await requireOwnTournament(db, person, tournamentId);
   const next = bracket.next;
   if (row.status !== "in_progress" || !next) throw new GameError("This tournament has no match left to pick.");
@@ -420,6 +435,7 @@ export async function giveUpTournament(db: SupabaseClient, person: Person, tourn
 
 /** Takes back the person's most recent pick, once, as long as they haven't picked the next match. */
 export async function undoLastPick(db: SupabaseClient, person: Person, tournamentId: string): Promise<void> {
+  await requireNotBanned(db, person);
   const { row, bracket } = await requireOwnTournament(db, person, tournamentId);
   const undoable: TournamentStatus[] = ["in_progress", "finished"];
   if (!row.can_undo || bracket.matchesPlayed === 0 || !undoable.includes(row.status)) {
@@ -544,6 +560,7 @@ export async function getInfinitePair(
     now = new Date(),
   }: { random?: Random; /** The signed-in player chose to play unrated. */ unrated?: boolean; now?: Date } = {},
 ): Promise<InfinitePair> {
+  await requireNotBanned(db, person);
   const choseUnrated = "playerId" in person && unrated;
   const name = await scopeName(db, categoryId);
   const scope = await scopeContestantIds(db, categoryId);
@@ -637,6 +654,7 @@ export async function pickInfiniteWinner(
   { pairId, winnerId }: { pairId: string; winnerId: string },
   { now = new Date() }: { now?: Date } = {},
 ): Promise<InfinitePick> {
+  await requireNotBanned(db, person);
   const row = await requireOfferedPair(db, person, pairId);
   if (winnerId !== row.first_contestant_id && winnerId !== row.second_contestant_id) {
     throw new GameError("That contestant isn't in the current pair.");
@@ -663,6 +681,7 @@ export async function skipInfinitePair(
   { pairId }: { pairId: string },
   { now = new Date() }: { now?: Date } = {},
 ): Promise<void> {
+  await requireNotBanned(db, person);
   const row = await requireOfferedPair(db, person, pairId);
   const signedIn = "playerId" in person;
   const [skipped] = check<{ outcome: "skipped" | "gone" | "out-of-skips" }[]>(

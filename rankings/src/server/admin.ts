@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { checkDisplayName } from "@/domain/profile/display-name";
 import type { Contributor, ReportTargetType } from "@/server/catalog";
 import type { SignedInPlayer } from "@/server/game";
 
@@ -177,6 +178,73 @@ export async function mergeContestants(
   if (!UUID.test(duplicateId) || !UUID.test(survivorId)) throw new AdminError(MERGE_REFUSALS.missing);
   const outcome = check(await db.rpc("merge_contestants", { p_duplicate_id: duplicateId, p_survivor_id: survivorId })) as string;
   if (outcome !== "merged") throw new AdminError(MERGE_REFUSALS[outcome]);
+}
+
+/**
+ * Changes a player's display name, under the same rules as choosing one; their profile moves to the
+ * new name. Returns the name as stored. Admin only.
+ */
+export async function renamePlayer(
+  db: SupabaseClient,
+  player: SignedInPlayer | null,
+  playerId: string,
+  input: string,
+): Promise<string> {
+  await requireAdmin(db, player);
+  const checked = checkDisplayName(input);
+  if (!checked.ok) throw new AdminError(checked.reason);
+  const { data, error } = UUID.test(playerId)
+    ? await db.from("players").update({ display_name: checked.displayName }).eq("id", playerId).select("id")
+    : { data: [], error: null };
+  if (error?.code === "23505") throw new AdminError("That display name is taken.");
+  if (error) throw error;
+  if (!data.length) throw new AdminError("That player doesn't exist.");
+  return checked.displayName;
+}
+
+/**
+ * Bans a player: they can no longer play, add to the catalog, or report. With `removeMatches`, all
+ * their matches are excluded from every ranking (flagged, not deleted); without it, any excluded
+ * earlier count again. Rankings change at the next refresh. Admin only; the admin can't ban themselves.
+ */
+export async function banPlayer(
+  db: SupabaseClient,
+  player: SignedInPlayer | null,
+  playerId: string,
+  { removeMatches }: { removeMatches: boolean },
+): Promise<void> {
+  await requireAdmin(db, player);
+  if (playerId === player!.playerId) throw new AdminError("You can't ban yourself.");
+  await setBan(db, playerId, true, removeMatches);
+}
+
+/** Lifts a player's ban; any of their matches the ban removed count again from the next refresh. Admin only. */
+export async function unbanPlayer(db: SupabaseClient, player: SignedInPlayer | null, playerId: string): Promise<void> {
+  await requireAdmin(db, player);
+  await setBan(db, playerId, false, false);
+}
+
+export type BanStatus = { banned: boolean; matchesRemoved: boolean };
+
+/** Whether a player is banned and their matches removed from rankings, for the admin; null for anyone else. */
+export async function getBanStatus(db: SupabaseClient, player: SignedInPlayer | null, playerId: string): Promise<BanStatus | null> {
+  if (!(await isAdmin(db, player)) || !UUID.test(playerId)) return null;
+  const [row, excluded] = await Promise.all([
+    db.from("players").select("banned").eq("id", playerId).maybeSingle(),
+    db.from("matches").select("id", { count: "exact", head: true }).eq("player_id", playerId).eq("excluded", true),
+  ]);
+  const found = check(row) as { banned: boolean } | null;
+  if (excluded.error) throw excluded.error;
+  return found && { banned: found.banned, matchesRemoved: (excluded.count ?? 0) > 0 };
+}
+
+async function setBan(db: SupabaseClient, playerId: string, banned: boolean, excludeMatches: boolean): Promise<void> {
+  const found =
+    UUID.test(playerId) &&
+    (check(
+      await db.rpc("set_player_ban", { p_player_id: playerId, p_banned: banned, p_exclude_matches: excludeMatches }),
+    ) as boolean);
+  if (!found) throw new AdminError("That player doesn't exist.");
 }
 
 /** Closes an open report: resolved (acted on) or dismissed (nothing wrong). Admin only. */

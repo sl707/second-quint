@@ -4,7 +4,16 @@ import { refresh } from "next/cache";
 import { redirect } from "next/navigation";
 import { readSignedInPlayer } from "@/lib/session";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { AdminError, closeReport, deleteCategory, mergeContestants, removeContestantFromCategory } from "@/server/admin";
+import {
+  AdminError,
+  banPlayer,
+  closeReport,
+  deleteCategory,
+  mergeContestants,
+  removeContestantFromCategory,
+  renamePlayer,
+  unbanPlayer,
+} from "@/server/admin";
 
 async function asAdmin(run: () => Promise<void>): Promise<void> {
   try {
@@ -34,6 +43,31 @@ export async function mergeContestantsAction(duplicateId: string, survivorId: st
     throw error;
   }
   redirect(`/contestants/${survivorId}`);
+}
+
+export type RenamePlayerState = { error: string | null };
+
+export async function renamePlayerAction(playerId: string, _: RenamePlayerState, form: FormData): Promise<RenamePlayerState> {
+  const player = await readSignedInPlayer();
+  let displayName: string;
+  try {
+    displayName = await renamePlayer(createAdminClient(), player, String(playerId), String(form.get("displayName") ?? ""));
+  } catch (error) {
+    if (error instanceof AdminError) return { error: error.message };
+    throw error;
+  }
+  redirect(`/players/${encodeURIComponent(displayName)}`);
+}
+
+export async function banPlayerAction(playerId: string, form: FormData): Promise<void> {
+  const player = await readSignedInPlayer();
+  const removeMatches = form.get("removeMatches") !== null;
+  await asAdmin(() => banPlayer(createAdminClient(), player, String(playerId), { removeMatches }));
+}
+
+export async function unbanPlayerAction(playerId: string): Promise<void> {
+  const player = await readSignedInPlayer();
+  await asAdmin(() => unbanPlayer(createAdminClient(), player, String(playerId)));
 }
 
 export async function deleteCategoryAction(categoryId: string): Promise<void> {

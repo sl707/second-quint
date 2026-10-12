@@ -532,6 +532,7 @@ export async function reportItem(db: SupabaseClient, person: Person, target: Rep
     UUID.test(target.id) &&
     !!check(await db.from(table).select("id").eq("id", target.id).maybeSingle());
   if (!exists) throw new CatalogError("That doesn't exist any more.");
+  if ("playerId" in person && (await findActor(db, person))?.banned) throw new CatalogError("Banned players can't report.");
 
   const { error } = await db.from("reports").insert({
     reporter_player_id: "playerId" in person ? person.playerId : null,

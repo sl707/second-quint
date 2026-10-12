@@ -60,6 +60,35 @@ test("a visitor reports a contestant, and the admin resolves it and removes the 
   await context.close();
 });
 
+test("the admin renames a player and bans them, removing their matches", async ({ page, baseURL }) => {
+  const tag = randomUUID().slice(0, 6);
+  const { data: target } = await admin.auth.admin.createUser({ email: `e2e-rude-${tag}@example.test`, email_confirm: true });
+  users.push(target.user!.id);
+  const { data: player } = await admin
+    .from("players")
+    .insert({ user_id: target.user!.id, display_name: `Rude_${tag}` })
+    .select("id")
+    .single();
+  const user = await signInAsNewUser(page.context(), baseURL!);
+  users.push(user.userId);
+  await admin.from("players").insert({ user_id: user.userId, display_name: `Admin_${tag}`, is_admin: true });
+
+  await page.goto(`/players/Rude_${tag}`);
+  await page.getByLabel("Display name").fill(`Fixed_${tag}`);
+  await page.getByRole("button", { name: "Rename" }).click();
+  await expect(page).toHaveURL(`/players/Fixed_${tag}`);
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText(`Fixed_${tag}`);
+
+  await page.getByLabel("Also remove their matches from all rankings").check();
+  await page.getByRole("button", { name: `Ban Fixed_${tag}` }).click();
+  await expect(page.getByText(`Fixed_${tag} is banned`)).toBeVisible();
+  const { data: row } = await admin.from("players").select("banned").eq("id", player!.id).single();
+  expect(row!.banned).toBe(true);
+
+  await page.getByRole("button", { name: `Unban Fixed_${tag}` }).click();
+  await expect(page.getByRole("button", { name: `Ban Fixed_${tag}` })).toBeVisible();
+});
+
 test("the admin merges a duplicate contestant, and its page then shows the survivor", async ({ page, baseURL }) => {
   const tag = randomUUID().slice(0, 6);
   const { data: rows } = await admin

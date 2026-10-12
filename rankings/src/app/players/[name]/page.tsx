@@ -7,11 +7,13 @@ import { readSignedInPlayer } from "@/lib/session";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createVisitorClient } from "@/lib/supabase/server";
 import { listPastTournaments, listUnfinishedTournaments, type PastTournament } from "@/server/game";
+import { getBanStatus } from "@/server/admin";
 import { getProfile } from "@/server/profiles";
 import { getPersonalRanking, listPersonalRankingScopes } from "@/server/rankings";
 import { isRatedVersion, RankingList, VersionSwitch } from "../../rankings/ranking-view";
 import { ReportForm } from "../../report-form";
 import { UnfinishedTournaments } from "../../unfinished-tournaments";
+import { PlayerModeration } from "./player-moderation";
 
 const loadProfile = cache((name: string) => getProfile(createAdminClient(), decodeURIComponent(name)));
 
@@ -37,6 +39,7 @@ export default async function ProfilePage({ params, searchParams }: PageProps<"/
   const ranking = (await getPersonalRanking(db, player.id, scope.categoryId, { rated }))!;
   // Only the player sees their own unfinished tournaments' resume links.
   const unfinished = viewer?.playerId === player.id ? await listUnfinishedTournaments(createAdminClient(), viewer) : [];
+  const banStatus = viewer?.playerId === player.id ? null : await getBanStatus(createAdminClient(), viewer, player.id);
 
   const path = `/players/${encodeURIComponent(player.displayName)}`;
   const href = (categoryId: string | null, ratedVersion: boolean) => {
@@ -110,6 +113,12 @@ export default async function ProfilePage({ params, searchParams }: PageProps<"/
           <p className="text-zinc-600">{player.displayName} hasn&apos;t played a tournament yet.</p>
         )}
       </section>
+
+      {banStatus && (
+        <div className="mt-8">
+          <PlayerModeration key={player.displayName} playerId={player.id} displayName={player.displayName} status={banStatus} />
+        </div>
+      )}
 
       {viewer?.playerId !== player.id && (
         <div className="mt-8">

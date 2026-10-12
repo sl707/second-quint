@@ -4,7 +4,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { readPerson } from "@/lib/session";
-import { getTournament, type ContestantCard, type Tournament } from "@/server/game";
+import { getTournament, isBanned, type ContestantCard, type Tournament } from "@/server/game";
 import { giveUpTournamentAction, pickWinnerAction, undoLastPickAction } from "../actions";
 import { BracketView, roundName } from "./bracket-view";
 
@@ -18,7 +18,8 @@ export default async function TournamentPage({ params }: PageProps<"/tournaments
 
   const { bracket } = tournament;
   const left = bracket.matchesLeft;
-  const inProgress = tournament.status === "in_progress";
+  const banned = await isBanned(createAdminClient(), person);
+  const playable = tournament.status === "in_progress" && !banned;
 
   return (
     <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-6 px-4 py-5 md:px-8 md:py-8">
@@ -45,7 +46,11 @@ export default async function TournamentPage({ params }: PageProps<"/tournaments
         </p>
       </header>
 
-      {inProgress && bracket.next && (
+      {banned && tournament.status === "in_progress" && (
+        <p className="rounded-xl border border-zinc-200 bg-white p-4 text-zinc-700">Your account is banned, so you can&apos;t play.</p>
+      )}
+
+      {playable && bracket.next && (
         <section aria-label="Current match" className="flex flex-col gap-3">
           <h2 className="text-center text-sm font-medium uppercase tracking-wide text-zinc-500">
             {bracket.next.thirdPlace ? "Third-place match" : roundName(bracket.next.round, bracket.rounds.length)}
@@ -69,7 +74,7 @@ export default async function TournamentPage({ params }: PageProps<"/tournaments
         </section>
       )}
 
-      {inProgress && tournament.canUndo && (
+      {playable && tournament.canUndo && (
         <form action={undoLastPickAction.bind(null, tournament.id)} className="flex justify-center">
           <button
             type="submit"
@@ -80,7 +85,7 @@ export default async function TournamentPage({ params }: PageProps<"/tournaments
         </form>
       )}
 
-      {inProgress && tournament.rated && <GiveUp tournamentId={tournament.id} />}
+      {playable && tournament.rated && <GiveUp tournamentId={tournament.id} />}
 
       {tournament.status === "given_up" && (
         <p className="rounded-xl border border-zinc-200 bg-white p-4 text-zinc-700">
