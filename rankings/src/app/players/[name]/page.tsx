@@ -13,6 +13,7 @@ import { getPersonalRanking, listPersonalRankingScopes } from "@/server/rankings
 import { isRatedVersion, RankingList, VersionSwitch } from "../../rankings/ranking-view";
 import { ReportForm } from "../../report-form";
 import { UnfinishedTournaments } from "../../unfinished-tournaments";
+import { DeleteAccount } from "./delete-account";
 import { PlayerModeration } from "./player-moderation";
 
 const loadProfile = cache((name: string) => getProfile(createAdminClient(), decodeURIComponent(name)));
@@ -120,7 +121,11 @@ export default async function ProfilePage({ params, searchParams }: PageProps<"/
         </div>
       )}
 
-      {viewer?.playerId !== player.id && (
+      {viewer?.playerId === player.id ? (
+        <div className="mt-8">
+          <DeleteAccount displayName={player.displayName} />
+        </div>
+      ) : (
         <div className="mt-8">
           <ReportForm targetType="profile" targetId={player.id} label={player.displayName} />
         </div>

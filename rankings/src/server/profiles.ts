@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { checkDisplayName } from "@/domain/profile/display-name";
+import type { SignedInPlayer } from "@/server/game";
 
 /** A player as anyone may see them: never their real name or email. */
 export type Player = { id: string; displayName: string; createdAt: string };
@@ -39,9 +40,22 @@ export async function chooseDisplayName(db: SupabaseClient, userId: string, inpu
   return data as unknown as Player;
 }
 
+/**
+ * Deletes the player's account: their profile, display name, tournaments, and personal rankings go,
+ * and so does their auth user (with their email). Their matches keep counting in global rankings and
+ * their contestants and categories stay, all credited to an anonymous deleted player.
+ */
+export async function deleteAccount(db: SupabaseClient, player: SignedInPlayer): Promise<void> {
+  const userId = check(await db.rpc("delete_player_account", { p_player_id: player.playerId })) as string | null;
+  if (!userId) throw new ProfileError("That account doesn't exist.");
+  const { error } = await db.auth.admin.deleteUser(userId);
+  if (error) throw error;
+}
+
 /** The player whose profile is at `idOrDisplayName` (a player ID, or a display name in any case). */
 export async function getProfile(db: SupabaseClient, idOrDisplayName: string): Promise<Player | null> {
-  const query = db.from("players").select(PUBLIC_COLUMNS);
+  // The deleted-player tombstone has no display name and no profile.
+  const query = db.from("players").select(PUBLIC_COLUMNS).not("display_name", "is", null);
   const filtered = UUID.test(idOrDisplayName)
     ? query.eq("id", idOrDisplayName)
     : query.eq("display_name_key", idOrDisplayName.toLowerCase());

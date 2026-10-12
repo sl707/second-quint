@@ -168,3 +168,39 @@ test("a player is reminded of an unfinished rated tournament, resumes it, and gi
   await expect(page.getByRole("radio", { name: /Dog breeds/ })).toHaveAccessibleName(/16 of 20 rated matches left today/);
   await expect(page.getByRole("status")).toContainText("This tournament will be rated.");
 });
+
+test("a player deletes their account after confirming, and their contestant stays, added by a deleted player", async ({
+  page,
+  context,
+  baseURL,
+}) => {
+  const user = await signInAsNewUser(context, baseURL!);
+  users.push(user.userId);
+  const displayName = `Leaving_${randomUUID().slice(0, 8)}`;
+  const { data: player } = await admin.from("players").insert({ user_id: user.userId, display_name: displayName }).select("id").single();
+  const { data: contestant } = await admin
+    .from("contestants")
+    .insert({ name: `E2E Left behind ${displayName}`, picture_512_url: "/samples/apple-512.svg", picture_128_url: "/samples/apple-128.svg", created_by: player!.id })
+    .select("id")
+    .single();
+
+  try {
+    await page.goto(`/players/${displayName}`);
+    await page.getByText("Delete account", { exact: true }).click();
+    await page.getByLabel("Type your display name to confirm").fill("someone-else");
+    await page.getByRole("button", { name: "Delete my account" }).click();
+    await expect(page.getByRole("alert").filter({ hasText: /\S/ })).toHaveText(`Type ${displayName} to confirm.`);
+
+    await page.getByLabel("Type your display name to confirm").fill(displayName);
+    await page.getByRole("button", { name: "Delete my account" }).click();
+    await expect(page).toHaveURL(`${baseURL}/`);
+    await expect(page.getByRole("button", { name: "Sign in with Google" })).toBeVisible();
+
+    expect((await admin.auth.admin.getUserById(user.userId)).data.user).toBeNull();
+    expect((await page.goto(`/players/${displayName}`))!.status()).toBe(404);
+    await page.goto(`/contestants/${contestant!.id}`);
+    await expect(page.getByText("Added by a deleted player")).toBeVisible();
+  } finally {
+    await admin.rpc("delete_contestant", { p_contestant_id: contestant!.id });
+  }
+});

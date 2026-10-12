@@ -4,6 +4,7 @@ import type { Contributor } from "@/server/catalog";
 /** "Added by …", linking to the contributor's profile. Sample catalog entries have no contributor. */
 export function AddedBy({ by }: { by: Contributor }) {
   if (!by) return null;
+  if (by === "deleted") return <p className="text-sm text-zinc-600">Added by a deleted player</p>;
   return (
     <p className="text-sm text-zinc-600">
       Added by{" "}

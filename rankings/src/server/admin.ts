@@ -33,7 +33,7 @@ export type OpenReport = {
   target: { id: string; name: string; href: string } | null;
   reason: string;
   /** null for signed-out visitors and deleted accounts */
-  reporter: Contributor;
+  reporter: Exclude<Contributor, "deleted">;
   reportedAt: string;
 };
 
@@ -194,7 +194,12 @@ export async function renamePlayer(
   const checked = checkDisplayName(input);
   if (!checked.ok) throw new AdminError(checked.reason);
   const { data, error } = UUID.test(playerId)
-    ? await db.from("players").update({ display_name: checked.displayName }).eq("id", playerId).select("id")
+    ? await db
+        .from("players")
+        .update({ display_name: checked.displayName })
+        .eq("id", playerId)
+        .not("user_id", "is", null)
+        .select("id")
     : { data: [], error: null };
   if (error?.code === "23505") throw new AdminError("That display name is taken.");
   if (error) throw error;

@@ -11,8 +11,8 @@ import {
 import { MAX_STORED_PICTURE_BYTES, storedPictureType } from "@/domain/picture/picture";
 import type { ContestantCard, Person, SignedInPlayer } from "@/server/game";
 
-/** Who added a contestant or category; null once that player has deleted their account. */
-export type Contributor = { id: string; displayName: string } | null;
+/** Who added a contestant or category: a player, "deleted" once they've deleted their account, or null for sample entries. */
+export type Contributor = { id: string; displayName: string } | "deleted" | null;
 
 export type Contestant = {
   id: string;
@@ -37,7 +37,8 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const CONTESTANT_COLUMNS =
   "id, name, picture_512_url, picture_128_url, created_at, players!contestants_created_by_fkey(id, display_name)";
 
-type ContributorRow = { id: string; display_name: string } | null;
+/** The deleted-player tombstone is the only player with no display name. */
+type ContributorRow = { id: string; display_name: string | null } | null;
 type ContestantRow = {
   id: string;
   name: string;
@@ -52,7 +53,8 @@ function check<T>({ data, error }: { data: T | null; error: unknown }): T {
   return data as T;
 }
 
-const contributor = (row: ContributorRow): Contributor => (row ? { id: row.id, displayName: row.display_name } : null);
+const contributor = (row: ContributorRow): Contributor =>
+  !row ? null : row.display_name === null ? "deleted" : { id: row.id, displayName: row.display_name };
 
 function toContestant(row: ContestantRow): Contestant {
   return {
