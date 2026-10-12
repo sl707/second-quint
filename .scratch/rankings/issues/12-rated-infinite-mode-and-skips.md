@@ -24,3 +24,5 @@ Done in e3311b2.
   - Choosing unrated gives a separate offered pair (`infinite_pairs.chose_unrated`, part of the unique key), so free unrated skips can't be used to clear the rated pair. The choice is a "Play unrated" checkbox on `/infinite` and travels as `?play=unrated`; the play page has a "Play rated" link back.
   - The scope list shows rated picks left per scope. The last rated pick's message says picks are now unrated; the header then explains why.
   - One new e2e walkthrough (signed-in rated play with skip counter, then unrated).
+
+Code review follow-up (2026-10-11): Infinite Mode now shows the midnight Eastern reset countdown to signed-in players too (story 52). `getInfinitePair` returns `allowanceResetsAt`, and the countdown component moved to `src/app/allowance-countdown.tsx`, shared with `/tournaments/new`.

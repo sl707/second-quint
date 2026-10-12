@@ -29,3 +29,5 @@ Implemented in 55f6405 (merged with `feat/rankings` in 9e78df0).
   - Signed-out tournaments aren't moved to the player at sign-in.
   - Signed-in tournaments are still unrated until the rated-allowance tickets.
 - Production setup: create a Google OAuth client with redirect URI `https://<project-ref>.supabase.co/auth/v1/callback`. In Supabase, enable the Google provider with that client ID and secret, disable the Email provider, set Site URL to `https://rankings.secondquint.com`, and add `https://rankings.secondquint.com/**` to the redirect URLs.
+
+Code review follow-up (2026-10-11): display names are no longer ASCII-only. They allow letters and digits from any script, single spaces between words, `_` and `-`: 3–24 characters after NFC composing, trimming, and collapsing inner whitespace, still unique ignoring case. Migration `unicode_display_names` replaces `players_display_name_check`. Profile links URL-encode the name; `getProfile` matches it with `ILIKE`, so it folds case exactly like the unique key.

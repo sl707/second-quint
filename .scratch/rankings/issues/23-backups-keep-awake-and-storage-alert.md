@@ -22,3 +22,5 @@ Setting up the Cloudflare R2 bucket and credentials needs the owner; prepare it 
 - Deviation, egress unchecked above: the Supabase Management API has no egress or usage endpoint, so the alert covers database and file storage only. The runbook tells the owner to check the dashboard Usage page monthly.
 - Validated with actionlint, action-validator and shellcheck. The storage check was run against the local DB and its issue logic against a stubbed `gh`. Backup and keep-alive haven't run against hosted Supabase or R2 yet.
 - Needs the owner: create the R2 bucket and token, add the GitHub secrets, merge to `main` (schedules only run there), then trigger each workflow once by hand.
+
+Code review follow-up (2026-10-11): the egress part of the unchecked criterion is an accepted deviation (the Management API has no egress endpoint). The alert covers database and file storage only, and the owner checks egress on the dashboard Usage page monthly, as `docs/ops.md` says.

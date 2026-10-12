@@ -24,3 +24,9 @@ Includes sample contestants and categories (with pictures) for local development
 ## Comments
 
 Done in eb5d692. Game service in `rankings/src/server/game.ts` (start, pick, undo, list unfinished) over new tables (contestants, categories, category_memberships, tournaments, matches) with public read and anonymous visitor IDs hidden by column grants; bracket rules are pure in `src/domain/tournament/`. Pages: `/tournaments/new` (scope, size, resume list) and `/tournaments/[id]` (current match, bracket, undo, tournament ranking); visitor identity is the httpOnly `sq_visitor` cookie. Deviations: undo is one step (after an undo, nothing more can be undone until the next pick; the final pick can be undone, reopening the tournament); matches gain a `bracket_match` column (position in play order, unique per tournament) to stop double taps recording two picks, and tournaments a `can_undo` flag; the third-place match is stored with the final's round number; sample pictures are generated SVGs rather than WebP; tournament play pages are visible only to the visitor who owns them; `npm run typecheck` now runs `next typegen` first.
+
+Code review follow-up (2026-10-11):
+
+- The final pick can be undone from the finished tournament's page (the Undo button stays until the person's next pick in another tournament). Undoing it is refused with "You can't undo the final pick while another rated tournament is unfinished. Finish or give up that one first." instead of failing on the one-unfinished-rated-tournament index.
+- Tournament picks now go through the `pick_tournament_match` SQL function (refuses banned players, see ticket 19).
+- Accepted deviation from the spec's row-level security line ("players write only their own play and catalog entries"): the database policies are read-only for the browser (`anon`, `authenticated`). Every write, play and catalog alike, goes through the server's services with the service-role client, which enforce who may write what.

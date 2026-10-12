@@ -29,3 +29,8 @@ Done in 09c0ac6.
   - The ban check is in the services, not inside the SQL play functions, so a pick racing the ban by milliseconds could still land (and, if matches were removed, stay counted until the admin bans again).
 
 Follow-up (fix after ticket 20, account deletion): a banned player who deletes their account can't be unbanned anymore. Deleting keeps only one-way hashes of their sign-in in `banned_identities`, with nothing linking them to a player, so there's no profile to unban and no way to tell which hashes were theirs. Their matches stay with the deleted-player tombstone, excluded or not, as the ban left them. To let such a person back in, someone would have to delete all of `banned_identities` or compute their hashes by hand in SQL (sha256 of `user:<auth user ID>`, `identity:<provider>:<provider user ID>`, `email:<lowercased email>`).
+
+Code review follow-up (2026-10-11), migration `ban_ends_play`:
+
+- Banning now ends the player's unfinished tournaments (rated and unrated) as given up, in the same transaction as the ban. Played matches stay (and follow "remove matches"), reserved allowance isn't returned, and unbanning doesn't reopen them. This replaces the deviation above where they stayed in progress.
+- The ban check is now inside the play SQL functions (`start_tournament`, the new `pick_tournament_match`, `pick_infinite_pair`, `skip_infinite_pair`). Each locks the player's row first and raises `player_banned`, so a play racing the ban lands before it or is refused. This replaces the deviation above about picks racing a ban.

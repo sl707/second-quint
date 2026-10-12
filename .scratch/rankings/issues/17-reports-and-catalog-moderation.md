@@ -29,3 +29,4 @@ Done in d04cecb.
   - When a contestant is removed from a category, other members' category ratings also lose their matches against it, from the next refresh. Unfinished tournaments in that category can still be finished.
   - Reports about deleted players or items show "Deleted" in the queue. The queue has no history view of closed reports.
 
+Code review follow-up (2026-10-11): accepted deviation on "enforced on the server and by database policies". Policies only govern reads (only the admin can read `reports`). Browser roles have no write policies at all, and admin-only SQL functions are service-role only. So writes are enforced in the server's services rather than by per-role write policies; see ticket 03.

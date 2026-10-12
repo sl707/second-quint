@@ -36,3 +36,5 @@ Implemented in 4bcb2f0.
   - The server checks uploads by file signature and size (at most 700 KB per size), not by pixel dimensions. Server Action body limit raised to 2 MB.
   - `/contestants/[id]` is a minimal page (picture, name, added by, categories, edit/delete); ticket 16 fills it out.
   - `sharp` added as a devDependency only (tests generate WebP with it).
+
+Code review follow-up (2026-10-11): accepted deviation, recorded against the WebP criterion above. Browsers that can't encode WebP from a canvas (Safari) store JPEG at the same sizes. Keeping it rather than adding a WebP encoder.
