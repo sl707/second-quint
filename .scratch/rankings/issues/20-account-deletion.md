@@ -26,3 +26,7 @@ Done in 4b4bd60.
   - A banned player can delete their account and sign up again with the same Google account as a new player. Their excluded matches stay excluded.
   - Someone signed in who never chose a display name isn't a player and has no Delete account control; their auth user stays.
   - Player search (ticket 15, not built yet) must leave out the tombstone (it has no display name).
+
+Follow-up fixes:
+
+- **Ban evasion** (fixes the deviation above). When a banned player deletes their account, `delete_player_account` first stores SHA-256 hashes of their sign-in in the new service-role-only `banned_identities` table: their auth user ID, each auth identity (provider and provider user ID, for example their Google account ID), and their lowercased email. `chooseDisplayName` refuses a new auth user who matches any of them with "This account is banned.", and `/welcome` shows that message instead of the display-name form, so they can't become a player again. The hashing runs in the security-definer `private.identity_hashes`, since only the database owner can read Supabase Auth's tables. Players who weren't banned can still come back. Such a ban can't be lifted (see ticket 19's comments). 2 service tests in `tests/service/account-deletion.test.ts`.

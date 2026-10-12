@@ -27,3 +27,5 @@ Done in 09c0ac6.
   - A banned player's unfinished tournaments stay in progress, and their tournament rankings on the profile still show; excluded matches only leave the global, personal, and contestant-page rankings.
   - The admin can't ban themselves. Banned players' profiles stay public, with no public "banned" label.
   - The ban check is in the services, not inside the SQL play functions, so a pick racing the ban by milliseconds could still land (and, if matches were removed, stay counted until the admin bans again).
+
+Follow-up (fix after ticket 20, account deletion): a banned player who deletes their account can't be unbanned anymore. Deleting keeps only one-way hashes of their sign-in in `banned_identities`, with nothing linking them to a player, so there's no profile to unban and no way to tell which hashes were theirs. Their matches stay with the deleted-player tombstone, excluded or not, as the ban left them. To let such a person back in, someone would have to delete all of `banned_identities` or compute their hashes by hand in SQL (sha256 of `user:<auth user ID>`, `identity:<provider>:<provider user ID>`, `email:<lowercased email>`).

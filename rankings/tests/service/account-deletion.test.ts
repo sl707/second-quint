@@ -19,7 +19,7 @@ import {
   skipInfinitePair,
   startTournament,
 } from "@/server/game";
-import { chooseDisplayName, deleteAccount, findPlayerByUser, getProfile, ProfileError } from "@/server/profiles";
+import { chooseDisplayName, deleteAccount, findPlayerByUser, getProfile, isBannedIdentity, ProfileError } from "@/server/profiles";
 import { getGlobalRanking, getPersonalRanking, refreshGlobalRankings, type GlobalRanking } from "@/server/rankings";
 import { createCategory, makeAdmin, newPlayer, newUser, recordMatch, removeTestData, testPicture, uniqueDisplayName } from "./fixtures";
 
@@ -136,6 +136,39 @@ describe("deleting an account", () => {
     await makeAdmin(db, admin.playerId);
     await expect(renamePlayer(db, admin, tombstone, uniqueDisplayName())).rejects.toThrow(AdminError);
     await expect(banPlayer(db, admin, tombstone, { removeMatches: true })).rejects.toThrow(AdminError);
+  });
+
+  it("keeps a banned player who deleted their account from signing up again", async () => {
+    const admin = await newPlayer(db);
+    await makeAdmin(db, admin.playerId);
+    const user = await newUser(db);
+    const player = await chooseDisplayName(db, user.userId, uniqueDisplayName());
+    await banPlayer(db, admin, player.id, { removeMatches: true });
+
+    await deleteAccount(db, { playerId: player.id });
+
+    const returning = await newUser(db, { email: user.email.toUpperCase() });
+    expect(await isBannedIdentity(db, returning.userId)).toBe(true);
+    await expect(chooseDisplayName(db, returning.userId, uniqueDisplayName())).rejects.toThrow(
+      new ProfileError("This account is banned."),
+    );
+    expect(await findPlayerByUser(db, returning.userId)).toBeNull();
+
+    // Only one-way hashes are kept, never the email or auth user ID.
+    const { data: kept } = await db.from("banned_identities").select("*");
+    const stored = JSON.stringify(kept);
+    expect(stored).not.toContain(user.email);
+    expect(stored).not.toContain(user.userId);
+  });
+
+  it("lets a player who wasn't banned sign up again after deleting their account", async () => {
+    const user = await newUser(db);
+    const player = await chooseDisplayName(db, user.userId, uniqueDisplayName());
+    await deleteAccount(db, { playerId: player.id });
+
+    const returning = await newUser(db, { email: user.email });
+    expect(await isBannedIdentity(db, returning.userId)).toBe(false);
+    expect((await chooseDisplayName(db, returning.userId, player.displayName)).displayName).toBe(player.displayName);
   });
 
   it("refuses an account that doesn't exist", async () => {

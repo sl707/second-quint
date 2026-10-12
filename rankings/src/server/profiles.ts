@@ -21,11 +21,19 @@ export async function findPlayerByUser(db: SupabaseClient, userId: string): Prom
   return check(await db.from("players").select(PUBLIC_COLUMNS).eq("user_id", userId).maybeSingle()) as Player | null;
 }
 
+/** Whether a signed-in auth user is the same sign-in as a banned player who deleted their account. */
+export async function isBannedIdentity(db: SupabaseClient, userId: string): Promise<boolean> {
+  return check(await db.rpc("is_banned_identity", { p_user_id: userId })) as boolean;
+}
+
+export const BANNED_IDENTITY_MESSAGE = "This account is banned.";
+
 /** Makes a signed-in auth user a player under `input`, at first sign-in. */
 export async function chooseDisplayName(db: SupabaseClient, userId: string, input: string): Promise<Player> {
   const checked = checkDisplayName(input);
   if (!checked.ok) throw new ProfileError(checked.reason);
   if (await findPlayerByUser(db, userId)) throw new ProfileError("You already chose a display name.");
+  if (await isBannedIdentity(db, userId)) throw new ProfileError(BANNED_IDENTITY_MESSAGE);
 
   const { data, error } = await db
     .from("players")

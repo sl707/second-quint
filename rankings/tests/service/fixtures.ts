@@ -69,10 +69,10 @@ export async function recordMatch(
 const users: string[] = [];
 
 /** Creates a Google-like auth user with a real-looking name and email, as sign-in would. */
-export async function newUser(db: SupabaseClient) {
+export async function newUser(db: SupabaseClient, { email }: { email?: string } = {}) {
   const tag = randomUUID().slice(0, 8);
   const { data, error } = await db.auth.admin.createUser({
-    email: `test-${tag}@example.test`,
+    email: email ?? `test-${tag}@example.test`,
     email_confirm: true,
     user_metadata: { full_name: `Real Name ${tag}` },
   });
