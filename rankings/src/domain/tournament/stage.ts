@@ -3,7 +3,11 @@ import { bracketSizeFor } from "./bracket";
 /** Where a match sits in a bracket. `fromFinal` orders stages: 0 is the final, larger is earlier. */
 export type Stage = { name: string; fromFinal: number };
 
-function roundName(fromFinal: number): string {
+export const THIRD_PLACE_MATCH = "Third-place match";
+
+/** The name of bracket round `round` (1 = first) of `roundCount`: "Round of 16", …, "Semifinals", "Final". */
+export function roundName(round: number, roundCount: number): string {
+  const fromFinal = roundCount - round;
   if (fromFinal === 0) return "Final";
   if (fromFinal === 1) return "Semifinals";
   if (fromFinal === 2) return "Quarterfinals";
@@ -24,8 +28,8 @@ export function stageOfMatch(size: number, index: number): Stage {
   let start = 0;
   for (let round = 1; round < rounds; round++) {
     const matches = round === 1 ? size - bracketSize / 2 : bracketSize / 2 ** round;
-    if (index < start + matches) return { name: roundName(rounds - round), fromFinal: rounds - round };
+    if (index < start + matches) return { name: roundName(round, rounds), fromFinal: rounds - round };
     start += matches;
   }
-  return index === size - 2 ? { name: "Third-place match", fromFinal: 0.5 } : { name: "Final", fromFinal: 0 };
+  return index === size - 2 ? { name: THIRD_PLACE_MATCH, fromFinal: 0.5 } : { name: "Final", fromFinal: 0 };
 }

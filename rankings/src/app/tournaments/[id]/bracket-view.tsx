@@ -1,13 +1,7 @@
 import Image from "next/image";
 import type { BracketMatch } from "@/domain/tournament/bracket";
+import { roundName, THIRD_PLACE_MATCH } from "@/domain/tournament/stage";
 import type { Tournament } from "@/server/game";
-
-export function roundName(round: number, roundCount: number): string {
-  if (round === roundCount) return "Final";
-  if (round === roundCount - 1) return "Semifinals";
-  if (round === roundCount - 2) return "Quarterfinals";
-  return `Round ${round}`;
-}
 
 export function BracketView({ tournament }: { tournament: Tournament }) {
   const { rounds, thirdPlace } = tournament.bracket;
@@ -31,7 +25,7 @@ export function BracketView({ tournament }: { tournament: Tournament }) {
                 ))}
                 {r === rounds.length - 1 && thirdPlace && (
                   <div className="flex flex-col gap-1">
-                    <h3 className="text-xs font-medium text-zinc-500">Third place</h3>
+                    <h3 className="text-xs font-medium text-zinc-500">{THIRD_PLACE_MATCH}</h3>
                     <MatchCard match={thirdPlace} tournament={tournament} current={isNext(thirdPlace)} />
                   </div>
                 )}

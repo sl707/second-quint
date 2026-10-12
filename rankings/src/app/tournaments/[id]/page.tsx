@@ -2,13 +2,14 @@ import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { roundName, THIRD_PLACE_MATCH } from "@/domain/tournament/stage";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { readPerson } from "@/lib/session";
 import { getTournament, isBanned, type ContestantCard } from "@/server/game";
 import { isVisitorVerified } from "@/server/human-check";
 import { HumanCheck } from "../../human-check";
 import { giveUpTournamentAction, undoLastPickAction } from "../actions";
-import { BracketView, roundName } from "./bracket-view";
+import { BracketView } from "./bracket-view";
 import { MatchPicker } from "./match-picker";
 
 export const metadata: Metadata = { title: "Tournament" };
@@ -59,7 +60,7 @@ export default async function TournamentPage({ params }: PageProps<"/tournaments
       {playable && bracket.next && !needsHumanCheck && (
         <section aria-label="Current match" className="flex flex-col gap-3">
           <h2 className="text-center text-sm font-medium uppercase tracking-wide text-zinc-500">
-            {bracket.next.thirdPlace ? "Third-place match" : roundName(bracket.next.round, bracket.rounds.length)}
+            {bracket.next.thirdPlace ? THIRD_PLACE_MATCH : roundName(bracket.next.round, bracket.rounds.length)}
           </h2>
           <MatchPicker
             tournamentId={tournament.id}

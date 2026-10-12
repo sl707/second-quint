@@ -1,5 +1,18 @@
 import { describe, expect, it } from "vitest";
-import { stageOfMatch } from "./stage";
+import { roundName, stageOfMatch } from "./stage";
+
+describe("roundName", () => {
+  it("names a bracket round by how far it is from the final", () => {
+    expect([1, 2, 3, 4, 5].map((round) => roundName(round, 5))).toEqual([
+      "Round of 32",
+      "Round of 16",
+      "Quarterfinals",
+      "Semifinals",
+      "Final",
+    ]);
+    expect(roundName(1, 2)).toBe("Semifinals");
+  });
+});
 
 const names = (size: number) => Array.from({ length: size }, (_, i) => stageOfMatch(size, i).name);
 
