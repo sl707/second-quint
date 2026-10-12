@@ -178,7 +178,7 @@ export function ContestantForm({ mode }: { mode: Mode }) {
             {copying ? "Copying…" : "Copy picture"}
           </button>
         </div>
-        <span className="text-sm text-zinc-500">The picture is copied once; the link isn&apos;t kept.</span>
+        <span className="text-sm text-zinc-500">Up to 4 MB. The picture is copied once; the link isn&apos;t kept.</span>
       </div>
 
       {resizing && <p className="text-sm text-zinc-600">Shrinking picture…</p>}

@@ -3,7 +3,7 @@ import http from "node:http";
 import https from "node:https";
 import type { LookupFunction } from "node:net";
 import { isPublicAddress } from "@/domain/network/address";
-import { MAX_PICTURE_BYTES, sniffPictureType, type AcceptedPictureType } from "@/domain/picture/picture";
+import { MAX_LINKED_PICTURE_BYTES, sniffPictureType, type AcceptedPictureType } from "@/domain/picture/picture";
 
 /** The link can't be copied; the message is safe to show to the player. */
 export class PictureLinkError extends Error {}
@@ -22,6 +22,7 @@ export type PictureLinkOptions = {
 export const MAX_LINK_REDIRECTS = 3;
 const DEFAULT_TIMEOUT_MS = 10_000;
 const MAX_LINK_LENGTH = 2048;
+const TOO_BIG = "That picture is over 4 MB. Download it and upload it instead; uploads can be up to 5 MB.";
 
 const systemResolve = async (hostname: string) => (await lookup(hostname, { all: true })).map((a) => a.address);
 
@@ -94,9 +95,9 @@ function request(url: URL, address: string, signal: AbortSignal): Promise<Hop> {
           reject(new PictureLinkError(`That link didn't work (the site answered ${status}).`));
           return;
         }
-        if (Number(res.headers["content-length"]) > MAX_PICTURE_BYTES) {
+        if (Number(res.headers["content-length"]) > MAX_LINKED_PICTURE_BYTES) {
           res.destroy();
-          reject(new PictureLinkError("That picture is over 5 MB."));
+          reject(new PictureLinkError(TOO_BIG));
           return;
         }
 
@@ -104,8 +105,8 @@ function request(url: URL, address: string, signal: AbortSignal): Promise<Hop> {
         let size = 0;
         res.on("data", (chunk: Buffer) => {
           size += chunk.length;
-          if (size > MAX_PICTURE_BYTES) {
-            reject(new PictureLinkError("That picture is over 5 MB."));
+          if (size > MAX_LINKED_PICTURE_BYTES) {
+            reject(new PictureLinkError(TOO_BIG));
             res.destroy();
             return;
           }
@@ -129,7 +130,7 @@ function request(url: URL, address: string, signal: AbortSignal): Promise<Hop> {
 
 /**
  * Fetches a picture from a link a player pasted, for the browser to resize like an upload: only
- * public addresses (re-checked on every redirect), at most 5 MB, JPG/PNG/WebP/GIF by their bytes.
+ * public addresses (re-checked on every redirect), at most 4 MB, JPG/PNG/WebP/GIF by their bytes.
  */
 export async function fetchPictureFromLink(link: string, options: PictureLinkOptions = {}): Promise<CopiedPicture> {
   let url = parseLink(link);

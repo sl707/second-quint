@@ -5,6 +5,8 @@
 
 export const ACCEPTED_PICTURE_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif"] as const;
 export const MAX_PICTURE_BYTES = 5 * 1024 * 1024;
+/** A picture copied from a link travels back to the browser in a function response, which Vercel caps at 4.5 MB. */
+export const MAX_LINKED_PICTURE_BYTES = 4 * 1024 * 1024;
 
 /** Stored sizes in px: 512 for matches, 128 for lists. */
 export const PICTURE_SIZES = [512, 128] as const;

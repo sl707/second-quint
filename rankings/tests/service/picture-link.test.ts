@@ -131,9 +131,9 @@ describe("copying a picture from a link", () => {
     await expect(copyPictureFromLink(db, player, local(next), asPublicSite)).rejects.toThrow("redirects too many times");
   });
 
-  it("refuses files over 5 MB, whether or not the site says their size up front", async () => {
+  it("refuses files over 4 MB, whether or not the site says their size up front", async () => {
     const player = await newPlayer(db);
-    const huge = new Uint8Array(5 * 1024 * 1024 + 1);
+    const huge = new Uint8Array(4 * 1024 * 1024 + 1);
     huge.set(await png());
     const declared = serve(huge, { "content-type": "image/png", "content-length": huge.length });
     let sent = 0;
@@ -150,8 +150,8 @@ describe("copying a picture from a link", () => {
       write();
     });
 
-    await expect(copyPictureFromLink(db, player, local(declared), asPublicSite)).rejects.toThrow("over 5 MB");
-    await expect(copyPictureFromLink(db, player, local(streamed), asPublicSite)).rejects.toThrow("over 5 MB");
+    await expect(copyPictureFromLink(db, player, local(declared), asPublicSite)).rejects.toThrow("That picture is over 4 MB. Download it and upload it instead; uploads can be up to 5 MB.");
+    await expect(copyPictureFromLink(db, player, local(streamed), asPublicSite)).rejects.toThrow("That picture is over 4 MB. Download it and upload it instead; uploads can be up to 5 MB.");
     expect(sent).toBeLessThan(20 * 1024 * 1024);
   });
 

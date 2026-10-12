@@ -24,3 +24,5 @@ Implemented in 8305b54.
   - The e2e covers only the refusal path: the production build refuses the loopback test server, and there's no public internet in tests. The success path's browser half is the same `resizePicture` the upload e2e covers.
   - Any port is allowed; a host with any non-public address is refused even if it also has public ones.
 - **Production**: Vercel caps function responses at 4.5 MB, so links to pictures between about 4.5 and 5 MB may fail there with the generic "couldn't be copied" message; if that matters, lower the link limit to 4 MB or shrink server-side.
+
+**Follow-up (link size cap):** Vercel caps function responses at 4.5 MB, so the copy-from-link cap is now 4 MB (`MAX_LINKED_PICTURE_BYTES`); uploads keep 5 MB. Over the cap, the form says "That picture is over 4 MB. Download it and upload it instead; uploads can be up to 5 MB." The link field's hint says "Up to 4 MB", and the service test checks a file just over 4 MB. This settles the production note above.
