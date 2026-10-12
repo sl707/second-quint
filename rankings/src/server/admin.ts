@@ -1,7 +1,8 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { checkDisplayName } from "@/domain/profile/display-name";
+import { stageOfMatch } from "@/domain/tournament/stage";
 import type { Contributor, ReportTargetType } from "@/server/catalog";
-import type { SignedInPlayer } from "@/server/game";
+import type { SignedInPlayer, TournamentStatus } from "@/server/game";
 
 /** Only the admin may do that, or the thing is gone; the message is safe to show. */
 export class AdminError extends Error {}
@@ -250,6 +251,60 @@ async function setBan(db: SupabaseClient, playerId: string, banned: boolean, exc
       await db.rpc("set_player_ban", { p_player_id: playerId, p_banned: banned, p_exclude_matches: excludeMatches }),
     ) as boolean);
   if (!found) throw new AdminError("That player doesn't exist.");
+}
+
+export type CompletionCounts = { total: number; finished: number; givenUp: number; inProgress: number; removed: number };
+
+export type TournamentCompletion = {
+  overall: CompletionCounts;
+  rated: CompletionCounts;
+  unrated: CompletionCounts;
+  /** Where unfinished and given-up tournaments stopped: the stage of their next match, first round first. */
+  stoppedAt: { stage: string; inProgress: number; givenUp: number }[];
+};
+
+type CompletionRow = { rated: boolean; status: TournamentStatus; size: number; matches_played: number; tournaments: number };
+
+const STATUS_KEYS: Record<TournamentStatus, keyof Omit<CompletionCounts, "total">> = {
+  finished: "finished",
+  given_up: "givenUp",
+  in_progress: "inProgress",
+  removed: "removed",
+};
+
+/**
+ * How tournaments started from `from` to `to` (New York dates `YYYY-MM-DD`, inclusive; either may
+ * be left open) ended up: finished, given up, still in progress, or removed, overall and by rated
+ * and unrated, and the stage where unfinished and given-up ones stopped. Admin only.
+ */
+export async function getTournamentCompletion(
+  db: SupabaseClient,
+  player: SignedInPlayer | null,
+  { from, to }: { from?: string; to?: string },
+): Promise<TournamentCompletion> {
+  await requireAdmin(db, player);
+  const day = (value: string | undefined) => (value && /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : null);
+  const rows = check(await db.rpc("tournament_completion", { p_from: day(from), p_to: day(to) })) as CompletionRow[];
+
+  const empty = (): CompletionCounts => ({ total: 0, finished: 0, givenUp: 0, inProgress: 0, removed: 0 });
+  const result = { overall: empty(), rated: empty(), unrated: empty() };
+  const stages = new Map<string, { stage: string; fromFinal: number; inProgress: number; givenUp: number }>();
+  for (const row of rows) {
+    for (const counts of [result.overall, row.rated ? result.rated : result.unrated]) {
+      counts.total += row.tournaments;
+      counts[STATUS_KEYS[row.status]] += row.tournaments;
+    }
+    if ((row.status === "in_progress" || row.status === "given_up") && row.matches_played < row.size) {
+      const { name, fromFinal } = stageOfMatch(row.size, row.matches_played);
+      const stage = stages.get(name) ?? { stage: name, fromFinal, inProgress: 0, givenUp: 0 };
+      stage[row.status === "in_progress" ? "inProgress" : "givenUp"] += row.tournaments;
+      stages.set(name, stage);
+    }
+  }
+  const stoppedAt = [...stages.values()]
+    .sort((a, b) => b.fromFinal - a.fromFinal)
+    .map(({ stage, inProgress, givenUp }) => ({ stage, inProgress, givenUp }));
+  return { ...result, stoppedAt };
 }
 
 /** Closes an open report: resolved (acted on) or dismissed (nothing wrong). Admin only. */

@@ -112,3 +112,20 @@ test("the admin merges a duplicate contestant, and its page then shows the survi
   await expect(page).toHaveURL(`/contestants/${survivor.id}`);
   await expect(page.getByRole("heading", { level: 1 })).toHaveText(survivor.name);
 });
+
+test("the admin sees tournament completion and narrows it to a date range", async ({ page, baseURL }) => {
+  const user = await signInAsNewUser(page.context(), baseURL!);
+  users.push(user.userId);
+  await admin.from("players").insert({ user_id: user.userId, display_name: `Admin_${randomUUID().slice(0, 6)}`, is_admin: true });
+
+  await page.goto("/admin");
+  const outcomes = page.getByRole("table", { name: "Tournament outcomes" });
+  await expect(outcomes.getByRole("rowheader")).toHaveText([/^All \(\d+\)$/, /^Rated \(\d+\)$/, /^Unrated \(\d+\)$/]);
+
+  await page.getByLabel("Started from").fill("1990-01-01");
+  await page.getByLabel("Started to").fill("1990-01-02");
+  await page.getByRole("button", { name: "Show" }).click();
+  await expect(page).toHaveURL(/from=1990-01-01&to=1990-01-02/);
+  await expect(outcomes.getByRole("rowheader").first()).toHaveText("All (0)");
+  await expect(page.getByText("No unfinished or given-up tournaments.")).toBeVisible();
+});

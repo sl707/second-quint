@@ -4,8 +4,17 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { readSignedInPlayer } from "@/lib/session";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { AdminError, isAdmin, listOpenReports, previewMerge, type MergeCandidate, type OpenReport } from "@/server/admin";
+import {
+  AdminError,
+  getTournamentCompletion,
+  isAdmin,
+  listOpenReports,
+  previewMerge,
+  type MergeCandidate,
+  type OpenReport,
+} from "@/server/admin";
 import { closeReportAction, mergeContestantsAction } from "./actions";
+import { TournamentCompletionView } from "./completion";
 
 export const metadata: Metadata = { title: "Admin" };
 
@@ -18,8 +27,9 @@ const TARGET_LABELS: Record<OpenReport["targetType"], string> = {
 const sectionHeading = "text-sm font-medium uppercase tracking-wide text-zinc-500";
 
 /**
- * The admin's report queue and contestant merging; everyone else gets "not found".
- * `?duplicate=…&survivor=…` (contestant links or IDs) shows a merge to confirm.
+ * The admin's report queue, contestant merging, and tournament completion; everyone else gets "not found".
+ * `?duplicate=…&survivor=…` (contestant links or IDs) shows a merge to confirm; `?from=…&to=…`
+ * (`YYYY-MM-DD`) limits tournament completion to tournaments started in that range.
  */
 export default async function AdminPage({ searchParams }: PageProps<"/admin">) {
   const db = createAdminClient();
@@ -29,6 +39,8 @@ export default async function AdminPage({ searchParams }: PageProps<"/admin">) {
   const params = await searchParams;
   const [duplicateInput, survivorInput] = [params.duplicate, params.survivor].map((v) => (typeof v === "string" ? v.trim() : ""));
   const merge = duplicateInput || survivorInput ? await previewMerge(db, player, duplicateInput, survivorInput).catch(refusal) : null;
+  const [from, to] = [params.from, params.to].map((v) => (typeof v === "string" ? v : ""));
+  const completion = await getTournamentCompletion(db, player, { from, to });
 
   return (
     <main className="mx-auto flex w-full max-w-xl flex-1 flex-col gap-6 px-5 py-8">
@@ -117,6 +129,8 @@ export default async function AdminPage({ searchParams }: PageProps<"/admin">) {
           </form>
         )}
       </section>
+
+      <TournamentCompletionView completion={completion} from={from} to={to} headingClass={sectionHeading} />
     </main>
   );
 }
