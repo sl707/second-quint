@@ -39,6 +39,22 @@ export function newVisitor() {
   return { visitorId };
 }
 
+/** Stores one finished match directly, as if a visitor had picked it in Infinite Mode. */
+export async function recordMatch(
+  db: SupabaseClient,
+  match: { winnerId: string; loserId: string; categoryId: string | null; playedAt?: Date; excluded?: boolean },
+) {
+  const { error } = await db.from("matches").insert({
+    winner_id: match.winnerId,
+    loser_id: match.loserId,
+    category_id: match.categoryId,
+    visitor_id: newVisitor().visitorId,
+    played_at: (match.playedAt ?? new Date()).toISOString(),
+    excluded: match.excluded ?? false,
+  });
+  if (error) throw error;
+}
+
 /** Removes everything the fixtures created, so the all-contestants scope doesn't keep growing. */
 export async function removeTestData(db: SupabaseClient) {
   if (visitors.length) {
