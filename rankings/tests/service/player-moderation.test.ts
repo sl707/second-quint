@@ -14,7 +14,7 @@ import {
 } from "@/server/game";
 import { getProfile } from "@/server/profiles";
 import {
-  getContestantStanding,
+  getContestantRankings,
   getGlobalRanking,
   getPersonalRanking,
   refreshGlobalRankings,
@@ -141,7 +141,7 @@ describe("removing a banned player's matches", () => {
       expect(matchCount((await getGlobalRanking(db, null, { rated }))!, a)).toBe(0);
       expect(matchCount((await getGlobalRanking(db, categoryId, { rated }))!, b)).toBe(1);
       expect((await getPersonalRanking(db, banned.playerId, null, { rated }))!.ranked).toEqual([]);
-      expect((await getContestantStanding(db, a, { rated }))!.record.matches).toBe(0);
+      expect((await getContestantRankings(db, a, { rated }))!.record.matches).toBe(0);
     }
 
     await unbanPlayer(db, admin, banned.playerId);
@@ -152,6 +152,6 @@ describe("removing a banned player's matches", () => {
     expect(matchCount((await getGlobalRanking(db, categoryId, { rated: false }))!, a)).toBe(2);
     expect(matchCount((await getGlobalRanking(db, null, { rated: false }))!, a)).toBe(3);
     expect(matchCount((await getPersonalRanking(db, banned.playerId, null, { rated: true }))!, a)).toBe(2);
-    expect((await getContestantStanding(db, a, { rated: false }))!.record.matches).toBe(3);
+    expect((await getContestantRankings(db, a, { rated: false }))!.record.matches).toBe(3);
   });
 });

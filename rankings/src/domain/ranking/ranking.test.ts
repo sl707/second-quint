@@ -13,7 +13,7 @@ function match(winnerId: string, loserId: string, playedAt: Date = NOW): Ranking
 }
 
 describe("calculateRanking", () => {
-  it("puts a single match on the Elo-like scale, with score at the low end of the range", () => {
+  it("puts a single match on the rating scale, with score at the low end of the range", () => {
     // Worked by hand: the fit solves 1 = 2/(1+p) + 1/(1+p²) for the winner, p ≈ 1.6956, and the
     // loser gets 1/p. Rating = 1500 + 173.7·ln p, range = 2·173.7 / sqrt(information).
     const ranking = calculateRanking([match("a", "b")], { contestantIds: ["a", "b"], halfLifeDays: null, now: NOW });

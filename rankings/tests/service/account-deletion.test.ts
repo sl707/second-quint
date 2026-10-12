@@ -27,12 +27,12 @@ const db = createAdminClient();
 
 afterAll(() => removeTestData(db));
 
-const standings = (ranking: GlobalRanking | null) =>
+const entriesOf = (ranking: GlobalRanking | null) =>
   ranking!.ranked.map((r) => ({ id: r.contestant.id, wins: r.wins, losses: r.losses, matches: r.matches, score: r.score }));
 
-function expectSameStandings(after: GlobalRanking | null, before: GlobalRanking | null) {
-  const a = standings(after);
-  const b = standings(before);
+function expectSameRanking(after: GlobalRanking | null, before: GlobalRanking | null) {
+  const a = entriesOf(after);
+  const b = entriesOf(before);
   const record = (rows: typeof a) => rows.map((r) => [r.id, r.wins, r.losses, r.matches]);
   expect(record(a)).toEqual(record(b));
   // The second refresh is a second later, so fading moves scores a hair.
@@ -64,15 +64,15 @@ describe("deleting an account", () => {
     const now = new Date();
     await refreshGlobalRankings(db, { now });
     const before = await Promise.all([true, false].map((rated) => getGlobalRanking(db, categoryId, { rated })));
-    expect(standings(before[0]).reduce((n, r) => n + r.matches, 0)).toBe(2 * 6);
-    expect(standings(before[1]).reduce((n, r) => n + r.matches, 0)).toBe(2 * 7);
+    expect(entriesOf(before[0]).reduce((n, r) => n + r.matches, 0)).toBe(2 * 6);
+    expect(entriesOf(before[1]).reduce((n, r) => n + r.matches, 0)).toBe(2 * 7);
 
     await deleteAccount(db, player);
 
     await refreshGlobalRankings(db, { now: new Date(now.getTime() + 1000) });
     const after = await Promise.all([true, false].map((rated) => getGlobalRanking(db, categoryId, { rated })));
-    expectSameStandings(after[0], before[0]);
-    expectSameStandings(after[1], before[1]);
+    expectSameRanking(after[0], before[0]);
+    expectSameRanking(after[1], before[1]);
   });
 
   it("leaves nothing personal: no profile, display name, tournaments, personal rankings, or email", async () => {

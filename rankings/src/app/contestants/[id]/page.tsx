@@ -7,7 +7,7 @@ import { readSignedInPlayer } from "@/lib/session";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createVisitorClient } from "@/lib/supabase/server";
 import { findMergeSurvivor, getContestant } from "@/server/catalog";
-import { getContestantStanding, type ContestantScopeStanding } from "@/server/rankings";
+import { getContestantRankings, type ContestantScopeRanking } from "@/server/rankings";
 import { AddedBy } from "../../added-by";
 import { ReportForm } from "../../report-form";
 import { isRatedVersion, VersionSwitch } from "../../rankings/ranking-view";
@@ -33,7 +33,7 @@ export default async function ContestantPage({ params, searchParams }: PageProps
     if (survivorId) permanentRedirect(`/contestants/${survivorId}${rated ? "" : "?version=unrated"}`);
     notFound();
   }
-  const standing = (await getContestantStanding(await createVisitorClient(), contestant.id, { rated }))!;
+  const rankings = (await getContestantRankings(await createVisitorClient(), contestant.id, { rated }))!;
   const path = `/contestants/${contestant.id}`;
 
   return (
@@ -58,21 +58,21 @@ export default async function ContestantPage({ params, searchParams }: PageProps
           Record
         </h2>
         <p className="text-2xl font-semibold tabular-nums">
-          {standing.record.wins}–{standing.record.losses}
+          {rankings.record.wins}–{rankings.record.losses}
         </p>
         <p className="text-sm text-zinc-600">
-          {standing.record.matches} {rated ? "rated " : ""}
-          {standing.record.matches === 1 ? "match" : "matches"}
+          {rankings.record.matches} {rated ? "rated " : ""}
+          {rankings.record.matches === 1 ? "match" : "matches"}
         </p>
       </section>
 
-      <section aria-labelledby="standings-heading" className="flex flex-col gap-2">
-        <h2 id="standings-heading" className={sectionHeading}>
-          Standings
+      <section aria-labelledby="rankings-heading" className="flex flex-col gap-2">
+        <h2 id="rankings-heading" className={sectionHeading}>
+          Rankings
         </h2>
-        <ul aria-labelledby="standings-heading" className="flex flex-col gap-2">
-          {standing.scopes.map((scope) => (
-            <ScopeStanding key={scope.categoryId ?? "overall"} scope={scope} rated={rated} />
+        <ul aria-labelledby="rankings-heading" className="flex flex-col gap-2">
+          {rankings.scopes.map((scope) => (
+            <ScopeRankingEntry key={scope.categoryId ?? "overall"} scope={scope} rated={rated} />
           ))}
         </ul>
         <p className="text-xs text-zinc-500">
@@ -84,9 +84,9 @@ export default async function ContestantPage({ params, searchParams }: PageProps
         <h2 id="head-to-head-heading" className={sectionHeading}>
           Head-to-head
         </h2>
-        {standing.headToHead.length > 0 ? (
+        {rankings.headToHead.length > 0 ? (
           <ol aria-labelledby="head-to-head-heading" className="flex flex-col gap-2">
-            {standing.headToHead.map((h) => (
+            {rankings.headToHead.map((h) => (
               <li key={h.opponent.id} className="flex items-center gap-3 rounded-xl border border-zinc-200 bg-white px-3 py-2">
                 <Image src={h.opponent.picture128Url} alt="" width={128} height={128} className="size-10 rounded-lg object-cover" />
                 <Link href={`/contestants/${h.opponent.id}`} className="flex-1 font-medium hover:underline">
@@ -138,27 +138,27 @@ export default async function ContestantPage({ params, searchParams }: PageProps
   );
 }
 
-function ScopeStanding({ scope, rated }: { scope: ContestantScopeStanding; rated: boolean }) {
+function ScopeRankingEntry({ scope, rated }: { scope: ContestantScopeRanking; rated: boolean }) {
   const rankingPath = scope.categoryId === null ? "/rankings/overall" : `/rankings/categories/${scope.categoryId}`;
-  const s = scope.standing;
+  const entry = scope.entry;
   return (
     <li className="flex flex-col gap-2 rounded-xl border border-zinc-200 bg-white px-4 py-3">
       <div className="flex items-baseline justify-between gap-3">
         <Link href={rated ? rankingPath : `${rankingPath}?version=unrated`} className="font-medium hover:underline">
           {scope.scopeName}
         </Link>
-        {s ? (
+        {entry ? (
           <span className="text-right">
-            <span className="text-lg font-semibold tabular-nums">#{s.position}</span>
-            <span className="text-sm text-zinc-500"> · Score {Math.round(s.score)}</span>
+            <span className="text-lg font-semibold tabular-nums">#{entry.position}</span>
+            <span className="text-sm text-zinc-500"> · Score {Math.round(entry.score)}</span>
           </span>
         ) : (
           <span className="text-sm text-zinc-500">Not yet judged</span>
         )}
       </div>
-      {s && (
+      {entry && (
         <p className="text-sm text-zinc-600 tabular-nums">
-          Rating {Math.round(s.rating)} ± {Math.round(s.range)} · {s.wins}–{s.losses}
+          Rating {Math.round(entry.rating)} ± {Math.round(entry.range)} · {entry.wins}–{entry.losses}
         </p>
       )}
       {scope.history.length > 0 && <RatingChart history={scope.history} scopeName={scope.scopeName} />}

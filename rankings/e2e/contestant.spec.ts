@@ -16,7 +16,7 @@ async function createCategory(name: string, contestantIds: string[]) {
   return category!.id as string;
 }
 
-test("a contestant page shows its standings, record, head-to-head, and rating chart", async ({ page, request }) => {
+test("a contestant page shows its rankings, record, head-to-head, and rating chart", async ({ page, request }) => {
   const tag = randomUUID().slice(0, 6);
   const { data: rows } = await admin
     .from("contestants")
@@ -50,12 +50,12 @@ test("a contestant page shows its standings, record, head-to-head, and rating ch
   await expect(page.getByRole("heading", { level: 1 })).toHaveText(star.name);
   await expect(page.getByRole("img", { name: star.name })).toBeVisible();
 
-  const standings = page.getByRole("list", { name: "Standings" });
-  const playedStanding = standings.getByRole("listitem").filter({ hasText: `E2E played ${tag}` });
-  await expect(playedStanding).toContainText("#1");
-  await expect(playedStanding).toContainText("±");
-  await expect(playedStanding.getByRole("img", { name: /Rating over time/ })).toBeVisible();
-  await expect(standings.getByRole("listitem").filter({ hasText: unplayed })).toContainText("Not yet judged");
+  const rankings = page.getByRole("list", { name: "Rankings" });
+  const playedEntry = rankings.getByRole("listitem").filter({ hasText: `E2E played ${tag}` });
+  await expect(playedEntry).toContainText("#1");
+  await expect(playedEntry).toContainText("±");
+  await expect(playedEntry.getByRole("img", { name: /Rating over time/ })).toBeVisible();
+  await expect(rankings.getByRole("listitem").filter({ hasText: unplayed })).toContainText("Not yet judged");
 
   await expect(page.getByRole("region", { name: "Record" })).toContainText("3–0");
   const headToHead = page.getByRole("list", { name: "Head-to-head" });

@@ -51,7 +51,7 @@ The ranking refresher (`refreshGlobalRankings` in `src/server/rankings.ts`) reco
 
 ### Contestant page
 
-`/contestants/[id]` (`?version=unrated`) reads `getContestantStanding` (`src/server/rankings.ts`): the contestant's entry in the latest stored Overall and Category Rankings of that version (null = not yet judged), its live record and most frequent opponents from the `contestant_head_to_head` SQL function, and each scope's weekly rating history. The first refresh of each New York week (Monday to Sunday, `snapshotWeek` in `src/domain/ranking/`) stores one `rating_snapshots` row per scope with judged contestants, from the rated lists only, with an entry per judged contestant (`store_rating_snapshot` skips a scope that already has the week's snapshot). Snapshots are never pruned; the chart (`rating-chart.tsx`) is an inline SVG.
+`/contestants/[id]` (`?version=unrated`) reads `getContestantRankings` (`src/server/rankings.ts`): the contestant's entry in the latest stored Overall and Category Rankings of that version (null = not yet judged), its live record and most frequent opponents from the `contestant_head_to_head` SQL function, and each scope's weekly rating history. The first refresh of each New York week (Monday to Sunday, `snapshotWeek` in `src/domain/ranking/`) stores one `rating_snapshots` row per scope with judged contestants, from the rated lists only, with an entry per judged contestant (`store_rating_snapshot` skips a scope that already has the week's snapshot). Snapshots are never pruned; the chart (`rating-chart.tsx`) is an inline SVG.
 
 ### Personal rankings and profiles
 

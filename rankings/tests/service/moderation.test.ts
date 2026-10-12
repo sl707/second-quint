@@ -15,7 +15,7 @@ import {
 } from "@/server/catalog";
 import { getTournament, listPastTournaments, pickWinner, startTournament } from "@/server/game";
 import {
-  getContestantStanding,
+  getContestantRankings,
   getGlobalRanking,
   getPersonalRanking,
   listPersonalRankingScopes,
@@ -161,7 +161,7 @@ describe("removing a contestant from a category", () => {
     const stored = (await getGlobalRanking(db, categoryId, { rated: true }))!;
     expect(stored.ranked.map((r) => r.contestant.id)).not.toContain(removed);
     expect(stored.ranked.map((r) => r.position)).toEqual([1, 2]);
-    expect((await getContestantStanding(db, removed, { rated: true }))!.scopes.map((s) => s.categoryId)).toEqual([null]);
+    expect((await getContestantRankings(db, removed, { rated: true }))!.scopes.map((s) => s.categoryId)).toEqual([null]);
 
     await refreshGlobalRankings(db);
     const categoryRanking = (await getGlobalRanking(db, categoryId, { rated: true }))!;

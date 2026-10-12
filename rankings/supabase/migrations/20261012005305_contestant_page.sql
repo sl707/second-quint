@@ -8,7 +8,7 @@ drop index public.matches_rated_loser_idx;
 create index matches_winner_idx on public.matches (winner_id);
 create index matches_loser_idx on public.matches (loser_id);
 
--- Wins and losses against each opponent, from counted matches (only rated ones when p_rated),
+-- Wins and losses against each opponent, from non-excluded matches (only rated ones when p_rated),
 -- most matches first, then by opponent name.
 create function public.contestant_head_to_head(p_contestant_id uuid, p_rated boolean)
 returns table (opponent_id uuid, wins integer, losses integer)

@@ -11,7 +11,7 @@ import {
   setCategoryCover,
 } from "@/server/catalog";
 import { getInfinitePair, getTournament, pickInfiniteWinner, pickWinner, startTournament } from "@/server/game";
-import { getContestantStanding, getGlobalRanking, refreshGlobalRankings } from "@/server/rankings";
+import { getContestantRankings, getGlobalRanking, refreshGlobalRankings } from "@/server/rankings";
 import { createCategory, makeAdmin, newPlayer, newVerifiedVisitor, recordMatch, removeTestData } from "./fixtures";
 
 const db = createAdminClient();
@@ -49,9 +49,9 @@ describe("merging duplicate contestants", () => {
     );
     expect((await getCategory(db, onlyDuplicateCategory))!.contestants.map((c) => c.id).toSorted()).toEqual([survivor, ...alone].toSorted());
     expect((await getCategory(db, categoryId))!.contestants.map((c) => c.id).toSorted()).toEqual([survivor, other].toSorted());
-    const standing = (await getContestantStanding(db, survivor, { rated: true }))!;
-    expect(standing.record).toEqual({ wins: 3, losses: 1, matches: 4 });
-    expect(standing.headToHead.map((h) => h.opponent.id)).toEqual([other]);
+    const rankings = (await getContestantRankings(db, survivor, { rated: true }))!;
+    expect(rankings.record).toEqual({ wins: 3, losses: 1, matches: 4 });
+    expect(rankings.headToHead.map((h) => h.opponent.id)).toEqual([other]);
 
     await refreshGlobalRankings(db);
     const overall = (await getGlobalRanking(db, null, { rated: true }))!;

@@ -52,7 +52,7 @@ async function readAll<T>(page: (from: number, to: number) => PromiseLike<{ data
 
 type MatchRow = { id: number; winner_id: string; loser_id: string; category_id: string | null; played_at: string; rated: boolean };
 
-async function readCountedMatches(db: SupabaseClient): Promise<MatchRow[]> {
+async function readNonExcludedMatches(db: SupabaseClient): Promise<MatchRow[]> {
   const rows: MatchRow[] = [];
   for (let after = 0; ; ) {
     const batch = check(
@@ -72,7 +72,7 @@ async function readCountedMatches(db: SupabaseClient): Promise<MatchRow[]> {
 
 /**
  * Recomputes every global ranking (each category plus overall, each in a rated and an unrated
- * version) from all counted matches and stores the ready-made lists. A category's matches feed
+ * version) from all non-excluded matches and stores the ready-made lists. A category's matches feed
  * its own ranking and the overall ranking; matches drawn from all contestants feed only the
  * overall ranking. Rated rankings use only rated matches; unrated rankings use every match.
  * The first refresh of each New York week also snapshots every rated list that has judged
@@ -83,7 +83,7 @@ export async function refreshGlobalRankings(
   { now = new Date() }: { now?: Date } = {},
 ): Promise<{ lists: number; matches: number; snapshots: number }> {
   const [matchRows, contestants, memberships, categories] = await Promise.all([
-    readCountedMatches(db),
+    readNonExcludedMatches(db),
     readAll<{ id: string }>((from, to) =>
       db.from("contestants").select("id").is("merged_into", null).order("name").order("id").range(from, to),
     ),
@@ -259,7 +259,7 @@ async function scopeContestants(db: SupabaseClient, categoryId: ScopeId): Promis
 
 /**
  * The player's Personal Ranking for a category, or their Overall Ranking, in its rated or unrated
- * version; null if the category doesn't exist. Computed now from only the player's own counted
+ * version; null if the category doesn't exist. Computed now from only the player's own non-excluded
  * matches, every one weighing the same however old, so it reflects their latest pick. Contestants
  * they haven't judged are listed as not yet judged, never filled in from global ratings.
  */
@@ -303,13 +303,13 @@ export async function getPersonalRanking(
   };
 }
 
-export type ContestantScopeStanding = {
+export type ContestantScopeRanking = {
   categoryId: ScopeId;
   scopeName: string;
   /** null until the ranking refresher has run since the contestant or scope was added */
   refreshedAt: string | null;
   /** null while the contestant is not yet judged in this scope */
-  standing: Omit<RankingRow, "contestant"> | null;
+  entry: Omit<RankingRow, "contestant"> | null;
   /** Weekly snapshots of its global rated rating here, oldest first, whichever version is shown */
   history: RatingSnapshot[];
 };
@@ -319,10 +319,10 @@ export type RatingSnapshot = { week: string; rating: number; range: number };
 
 export type HeadToHead = { opponent: ContestantCard; wins: number; losses: number; matches: number };
 
-export type ContestantStanding = {
+export type ContestantRankings = {
   /** The Overall Ranking first, then each of the contestant's categories by name */
-  scopes: ContestantScopeStanding[];
-  /** Every counted match it played (only rated ones in the rated version), unfaded and current */
+  scopes: ContestantScopeRanking[];
+  /** Every non-excluded match it played (only rated ones in the rated version), unfaded and current */
   record: { wins: number; losses: number; matches: number };
   /** Its most frequent opponents, most matches first */
   headToHead: HeadToHead[];
@@ -335,11 +335,11 @@ export const HEAD_TO_HEAD_SHOWN = 5;
  * How a contestant is doing in the latest stored global rankings, rated or unrated: its place in
  * the Overall Ranking and in each of its categories. Null if the contestant doesn't exist.
  */
-export async function getContestantStanding(
+export async function getContestantRankings(
   db: SupabaseClient,
   contestantId: string,
   { rated }: { rated: boolean },
-): Promise<ContestantStanding | null> {
+): Promise<ContestantRankings | null> {
   const [contestant, memberships, opponents, snapshotRows] = await Promise.all([
     db.from("contestants").select("id").eq("id", contestantId).maybeSingle(),
     db.from("category_memberships").select("categories!inner(id, name)").eq("contestant_id", contestantId),
@@ -390,14 +390,14 @@ export async function getContestantStanding(
     : [];
   const entryByList = new Map(entries.map((e) => [e.list_id, e]));
 
-  const scopes = [{ id: null, name: OVERALL_RANKING }, ...categories].map(({ id, name }): ContestantScopeStanding => {
+  const scopes = [{ id: null, name: OVERALL_RANKING }, ...categories].map(({ id, name }): ContestantScopeRanking => {
     const list = latestList.get(id);
     const entry = list && entryByList.get(list.id);
     return {
       categoryId: id,
       scopeName: name,
       refreshedAt: list?.refreshed_at ?? null,
-      standing:
+      entry:
         entry && entry.judged
           ? {
               position: entry.position,

@@ -11,7 +11,7 @@ export type RankingOptions = {
 
 export type RankedContestant = {
   contestantId: string;
-  /** Best guess of strength on an Elo-like scale centred on 1500. */
+  /** Best guess of strength on a logistic scale centred on 1500, where 400 points means 10-to-1 odds. */
   rating: number;
   /** Half-width of the rating's confidence range (rating ± range). */
   range: number;
@@ -29,7 +29,7 @@ export type Ranking = {
   notYetJudged: string[];
 };
 
-const ELO_SCALE = 400 / Math.LN10;
+const RATING_SCALE = 400 / Math.LN10;
 const MAX_ITERATIONS = 500;
 const TOLERANCE = 1e-9;
 
@@ -97,8 +97,8 @@ export function calculateRanking(matches: readonly RankingMatch[], options: Rank
     }
     let information = (2 * p[i]) / (p[i] + 1) ** 2;
     for (const o of opponents[i]) information += (o.total * p[i] * p[o.index]) / (p[i] + p[o.index]) ** 2;
-    const rating = 1500 + ELO_SCALE * Math.log(p[i]);
-    const range = (2 * ELO_SCALE) / Math.sqrt(information);
+    const rating = 1500 + RATING_SCALE * Math.log(p[i]);
+    const range = (2 * RATING_SCALE) / Math.sqrt(information);
     ranked.push({ contestantId, rating, range, score: rating - range, wins: wins[i], losses: losses[i], matches: played });
   });
   ranked.sort((a, b) => b.score - a.score);
