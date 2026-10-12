@@ -1,0 +1,75 @@
+@import "tailwindcss";
+
+/*
+ * Arcade versus: a dark-only theme. Text always sits on a solid surface (ink, plate, raised) or a
+ * solid scrim, never directly on a picture or a bright gradient. Secondary text is `text-muted`
+ * (or brighter) and at least 12px, which keeps AA contrast on every surface.
+ */
+@theme inline {
+  --font-sans: var(--font-geist-sans), system-ui, sans-serif;
+  --font-display: var(--font-anton), var(--font-geist-sans), sans-serif;
+}
+
+@theme {
+  --color-ink: #0b0712;
+  --color-plate: #17121f;
+  --color-raised: #221a2d;
+  --color-edge: #4a3f57;
+  --color-muted: #c4c0cc;
+  --color-pink: #ff2e88;
+  --color-pink-bright: #ff5ca3;
+  --color-orange: #ff8a00;
+  --color-orange-bright: #ffa033;
+  --color-gold: #ffd23f;
+  --color-danger: #ff8080;
+  --color-danger-deep: #b3132b;
+
+  --animate-neon: neon 2.4s ease-in-out infinite;
+  --animate-slam: slam 0.5s cubic-bezier(0.2, 1.6, 0.4, 1) both;
+
+  @keyframes neon {
+    0%,
+    100% {
+      text-shadow: 0 0 8px #ff2e88, 0 0 24px #ff2e88, 0 0 48px #ff8a00;
+    }
+    50% {
+      text-shadow: 0 0 4px #ff2e88, 0 0 12px #ff2e88, 0 0 20px #ff8a00;
+    }
+  }
+  @keyframes slam {
+    from {
+      transform: scale(2.4) rotate(-12deg);
+      opacity: 0;
+    }
+    to {
+      transform: scale(1) rotate(-6deg);
+      opacity: 1;
+    }
+  }
+}
+
+@layer base {
+  html {
+    color-scheme: dark;
+  }
+  body {
+    background-color: var(--color-ink);
+    color: white;
+    font-family: var(--font-sans);
+  }
+  ::selection {
+    background-color: var(--color-pink);
+    color: black;
+  }
+  :focus-visible {
+    outline: 2px solid var(--color-orange);
+    outline-offset: 2px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-neon,
+  .animate-slam {
+    animation: none;
+  }
+}
