@@ -44,7 +44,7 @@ describe("tournament completion", () => {
     const ratedInProgress = await startTournament(db, other, { categoryId: five.categoryId, size: 5 });
     await play(other, ratedInProgress.tournamentId, 3);
     const notStarted = await startTournament(db, visitor, { categoryId: four.categoryId, size: 4 });
-    const unratedInProgress = await startTournament(db, player, { categoryId: four.categoryId, size: 4, unrated: true });
+    const unratedInProgress = await startTournament(db, player, { categoryId: four.categoryId, size: 4, play: "unrated" });
     await play(player, unratedInProgress.tournamentId, 2);
     expect([finished, givenUp, ratedInProgress, notStarted, unratedInProgress].map((t) => t.rated)).toEqual([
       true,
@@ -53,7 +53,7 @@ describe("tournament completion", () => {
       false,
       false,
     ]);
-    const nextDay = await startTournament(db, other, { categoryId: four.categoryId, size: 4, unrated: true });
+    const nextDay = await startTournament(db, other, { categoryId: four.categoryId, size: 4, play: "unrated" });
 
     const day = uniquePastDay();
     const dayAfter = new Date(Date.parse(day) + 86_400_000).toISOString().slice(0, 10);

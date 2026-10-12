@@ -69,7 +69,7 @@ describe("a hand-picked tournament", () => {
     const player = await newPlayer(db);
 
     await expect(
-      startTournament(db, player, { categoryId, contestantIds: contestantIds.slice(0, 4), expectRated: true }),
+      startTournament(db, player, { categoryId, contestantIds: contestantIds.slice(0, 4), play: "rated" }),
     ).rejects.toThrow("Hand-picked tournaments are always unrated.");
     expect(await listUnfinishedTournaments(db, player)).toEqual([]);
   });

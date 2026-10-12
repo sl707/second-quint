@@ -138,7 +138,7 @@ describe("a tournament is unrated", () => {
 
     const started = await startTournament(db, visitor, { categoryId, size: 4 });
     expect(started).toMatchObject({ rated: false, unratedReason: "signed-out" });
-    await expect(startTournament(db, visitor, { categoryId, size: 4, expectRated: true })).rejects.toThrow(GameError);
+    await expect(startTournament(db, visitor, { categoryId, size: 4, play: "rated" })).rejects.toThrow(GameError);
 
     await finish(visitor, started.tournamentId);
     expect(await tournamentMatches(started.tournamentId)).toEqual(Array(4).fill({ rated: false }));
@@ -148,7 +148,7 @@ describe("a tournament is unrated", () => {
     const { categoryId } = await createCategory(db, 20);
     const player = await newPlayer(db);
 
-    const started = await startTournament(db, player, { categoryId, size: 4, unrated: true });
+    const started = await startTournament(db, player, { categoryId, size: 4, play: "unrated" });
 
     expect(started).toMatchObject({ rated: false, unratedReason: "chose-unrated" });
     expect(await allowanceIn(player, categoryId)).toMatchObject({ used: 0, remaining: 20 });
@@ -171,7 +171,7 @@ describe("a tournament is unrated", () => {
   it("but an unfinished unrated tournament doesn't stop a rated one", async () => {
     const { categoryId } = await createCategory(db, 20);
     const player = await newPlayer(db);
-    await startTournament(db, player, { categoryId, size: 4, unrated: true });
+    await startTournament(db, player, { categoryId, size: 4, play: "unrated" });
 
     expect(await startTournament(db, player, { categoryId, size: 4 })).toMatchObject({ rated: true });
   });
@@ -212,7 +212,7 @@ describe("starting only if rated, as the player was told", () => {
     const player = await newPlayer(db);
     await startTournament(db, player, { categoryId, size: 4 });
 
-    await expect(startTournament(db, player, { categoryId, size: 4, expectRated: true })).rejects.toThrow(
+    await expect(startTournament(db, player, { categoryId, size: 4, play: "rated" })).rejects.toThrow(
       /unfinished rated tournament/,
     );
     const { count } = await db.from("tournaments").select("id", { count: "exact", head: true }).eq("player_id", player.playerId);

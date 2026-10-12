@@ -40,7 +40,7 @@ describe("the player's unfinished tournaments", () => {
     const { categoryId } = await createCategory(db, 20);
     const player = await newPlayer(db);
     const rated = await startTournament(db, player, { categoryId, size: 4 });
-    const unrated = await startTournament(db, player, { categoryId, size: 5, unrated: true });
+    const unrated = await startTournament(db, player, { categoryId, size: 5, play: "unrated" });
 
     expect(await listUnfinishedTournaments(db, player)).toEqual([
       expect.objectContaining({ id: unrated.tournamentId, rated: false, matchesLeft: 5 }),
@@ -71,7 +71,7 @@ describe("an unfinished rated tournament", () => {
     const player = await newPlayer(db);
     await startTournament(db, player, { categoryId, size: 4 });
 
-    const unrated = await startTournament(db, player, { categoryId, size: 4, unrated: true });
+    const unrated = await startTournament(db, player, { categoryId, size: 4, play: "unrated" });
 
     expect(unrated).toMatchObject({ rated: false, unratedReason: "chose-unrated" });
     expect(await listUnfinishedTournaments(db, player)).toHaveLength(2);
@@ -115,7 +115,7 @@ describe("giving up a rated tournament", () => {
   it("is only for the player's own unfinished rated tournaments", async () => {
     const { categoryId } = await createCategory(db, 20);
     const player = await newPlayer(db);
-    const unrated = await startTournament(db, player, { categoryId, size: 4, unrated: true });
+    const unrated = await startTournament(db, player, { categoryId, size: 4, play: "unrated" });
     const rated = await startTournament(db, player, { categoryId, size: 4 });
 
     await expect(giveUpTournament(db, player, unrated.tournamentId)).rejects.toThrow(GameError);

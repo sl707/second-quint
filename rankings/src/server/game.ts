@@ -174,16 +174,21 @@ export async function listScopeContestants(db: SupabaseClient, categoryId: Scope
   }
 }
 
+/**
+ * How the person wants to play: `rated-if-possible` starts rated when the rules allow and unrated
+ * otherwise; `rated` starts only if rated (as the player was told), otherwise throws and starts
+ * nothing; `unrated` never uses allowance.
+ */
+export type TournamentPlay = "rated-if-possible" | "rated" | "unrated";
+
 export type StartTournamentOptions = {
   categoryId: ScopeId;
   /** How many contestants to draw at random; ignored when `contestantIds` hand-picks them. */
   size?: number;
   /** Hand-picks the tournament's contestants from the scope (at least 4); the tournament is then always unrated. */
   contestantIds?: string[];
-  /** The signed-in player chose to play unrated. */
-  unrated?: boolean;
-  /** Start only if the tournament will be rated, as the player was told; otherwise throw and start nothing. */
-  expectRated?: boolean;
+  /** Defaults to `rated-if-possible`. */
+  play?: TournamentPlay;
   /** When the tournament starts, which decides the allowance day. */
   now?: Date;
 };
@@ -217,7 +222,8 @@ export async function startTournament(
   }
 
   const signedIn = "playerId" in person;
-  const choseUnrated = signedIn && options.unrated === true;
+  const play = options.play ?? "rated-if-possible";
+  const choseUnrated = signedIn && play === "unrated";
   const now = options.now ?? new Date();
   const allowance = ratedAllowance({ allContestants: options.categoryId === null, contestantCount: scope.length });
   const [started] = check<{ tournament_id: string | null; rated: boolean; unrated_reason: UnratedReason | null }[]>(
@@ -228,7 +234,7 @@ export async function startTournament(
       p_size: matchCountFor(size),
       p_bracket: { slots: drawBracket(pool, size, random) },
       p_try_rated: signedIn && !choseUnrated,
-      p_require_rated: options.expectRated === true,
+      p_require_rated: play === "rated",
       p_day: allowanceDay(now),
       p_allowance: allowance,
       p_hand_picked: handPicked,

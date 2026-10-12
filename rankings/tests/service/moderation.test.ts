@@ -192,7 +192,7 @@ describe("deleting a category", () => {
     const [a, b] = contestantIds;
     const player = await newPlayer(db);
     for (let i = 0; i < 2; i++) await recordMatch(db, { winnerId: a, loserId: b, categoryId, rated: true, playerId: player.playerId });
-    const { tournamentId } = await startTournament(db, player, { categoryId, size: 4, unrated: true });
+    const { tournamentId } = await startTournament(db, player, { categoryId, size: 4, play: "unrated" });
     await reportItem(db, player, { type: "category", id: categoryId }, "Duplicate of another");
     await refreshGlobalRankings(db);
     const admin = await newAdmin();

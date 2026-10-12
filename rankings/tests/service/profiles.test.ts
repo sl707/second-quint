@@ -101,7 +101,7 @@ describe("profiles", () => {
     const { categoryId } = await createCategory(db, 4);
     const player = await newPlayer(db);
     const someoneElse = await newPlayer(db);
-    const finished = await startTournament(db, player, { categoryId, size: 4, unrated: true });
+    const finished = await startTournament(db, player, { categoryId, size: 4, play: "unrated" });
     for (let i = 0; i < 4; i++) {
       const next = (await getTournament(db, player, finished.tournamentId))!.bracket.next!;
       await pickWinner(db, player, finished.tournamentId, next.contestantIds[0]);

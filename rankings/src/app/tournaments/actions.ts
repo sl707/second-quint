@@ -14,7 +14,7 @@ export async function startTournamentAction(_: StartTournamentState, form: FormD
   const scope = String(form.get("scope") ?? "");
   const size = Number(form.get("size"));
   // Start exactly what the player was told: rated, or unrated (never using allowance they didn't expect to spend).
-  const expectRated = form.get("expectRated") === "1";
+  const play = form.get("play") === "rated" ? "rated" : "unrated";
   const contestantIds = form.get("mode") === "pick" ? form.getAll("contestant").map(String) : undefined;
   let tournamentId: string;
   try {
@@ -22,8 +22,7 @@ export async function startTournamentAction(_: StartTournamentState, form: FormD
       categoryId: scope === "all" ? null : scope,
       size,
       contestantIds,
-      unrated: !expectRated,
-      expectRated,
+      play,
     }));
   } catch (error) {
     if (error instanceof GameError) {

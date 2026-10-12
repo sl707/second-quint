@@ -239,7 +239,7 @@ export function NewTournamentForm({
               ? `Starting reserves all ${sizeNumber} of its matches from today's rated allowance, even if you don't finish.`
               : unratedReasonMessage(status.reason, { size: sizeNumber, remainingAllowance })}
           </p>
-          <input type="hidden" name="expectRated" value={status.rated ? "1" : ""} />
+          <input type="hidden" name="play" value={status.rated ? "rated" : "unrated"} />
         </div>
       )}
 

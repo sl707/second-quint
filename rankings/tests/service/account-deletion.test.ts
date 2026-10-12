@@ -83,7 +83,7 @@ describe("deleting an account", () => {
     const admin = await newPlayer(db);
     await makeAdmin(db, admin.playerId);
     await playRatedTournament(player, categoryId);
-    await startTournament(db, player, { categoryId, size: 4, unrated: true });
+    await startTournament(db, player, { categoryId, size: 4, play: "unrated" });
     const pair = await getInfinitePair(db, player, null);
     await skipInfinitePair(db, player, { pairId: pair.pairId });
     await getInfinitePair(db, player, categoryId);
