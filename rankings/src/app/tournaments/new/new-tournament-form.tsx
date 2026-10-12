@@ -7,7 +7,7 @@ import { tournamentRatedStatus, unratedReasonMessage } from "@/domain/allowance/
 import { MIN_TOURNAMENT_SIZE } from "@/domain/tournament/size";
 import type { ContestantCard, ScopeOption } from "@/server/game";
 import { startTournamentAction } from "../actions";
-import { AllowanceCountdown } from "./allowance-countdown";
+import { AllowanceCountdown } from "../../allowance-countdown";
 
 const scopeValue = (scope: { categoryId: string | null }) => scope.categoryId ?? "all";
 

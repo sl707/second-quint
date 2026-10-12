@@ -67,6 +67,7 @@ test("a signed-in player plays rated with a skip counter, or chooses unrated", a
   const status = page.getByText(/rated skips left/);
   await expect(page.getByText("Rated", { exact: true })).toBeVisible();
   await expect(status).toContainText("5 of 5 rated skips left");
+  await expect(page.getByRole("timer", { name: "Time until the rated allowance resets" })).toHaveText(/^\d+h \d\dm \d\ds$/);
   const picksLeft = Number((await status.textContent())!.match(/(\d+) rated picks? left/)![1]);
 
   await page.getByRole("button", { name: "Skip" }).click();

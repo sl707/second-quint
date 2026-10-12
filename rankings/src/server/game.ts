@@ -502,6 +502,8 @@ export type InfinitePair = {
   scopeName: string;
   contestants: [ContestantCard, ContestantCard];
   play: InfinitePlayStatus;
+  /** When a signed-in player's rated allowance next resets (midnight in New York), as an ISO timestamp; null when signed out. */
+  allowanceResetsAt: string | null;
 };
 
 export type InfinitePick = { rated: boolean };
@@ -625,7 +627,14 @@ export async function getInfinitePair(
     return { id: c.id, name: c.name, picture512Url: c.picture_512_url, picture128Url: c.picture_128_url };
   };
   const play = await infinitePlayStatus(db, person, categoryId, { choseUnrated, scopeSize: scope.length, now });
-  return { pairId: row.id, categoryId, scopeName: name, contestants: [card(ids[0]), card(ids[1])], play };
+  return {
+    pairId: row.id,
+    categoryId,
+    scopeName: name,
+    contestants: [card(ids[0]), card(ids[1])],
+    play,
+    allowanceResetsAt: isSignedIn(person) ? nextAllowanceReset(now).toISOString() : null,
+  };
 }
 
 async function infinitePlayStatus(

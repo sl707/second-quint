@@ -6,6 +6,7 @@ import { readPerson } from "@/lib/session";
 import { RATED_SKIPS_PER_DAY } from "@/domain/allowance/allowance";
 import { GameError, getInfinitePair, isSignedIn, type InfinitePair } from "@/server/game";
 import { isVisitorVerified } from "@/server/human-check";
+import { AllowanceCountdown } from "../../allowance-countdown";
 import { HumanCheck } from "../../human-check";
 import { startInfiniteModeAction } from "../actions";
 import { InfinitePlay } from "./infinite-play";
@@ -19,12 +20,13 @@ export default async function InfiniteModePage({ params, searchParams }: PagePro
   if (scope !== "all" && !UUID.test(scope)) notFound();
   const unrated = (await searchParams).play === "unrated";
   const person = await readPerson();
+  const now = new Date();
 
   let pair: InfinitePair | null = null;
   let problem: string | null = null;
   if (person) {
     try {
-      pair = await getInfinitePair(createAdminClient(), person, scope === "all" ? null : scope, { unrated });
+      pair = await getInfinitePair(createAdminClient(), person, scope === "all" ? null : scope, { unrated, now });
     } catch (error) {
       if (!(error instanceof GameError)) throw error;
       problem = error.message;
@@ -42,7 +44,17 @@ export default async function InfiniteModePage({ params, searchParams }: PagePro
           </Link>
           <h1 className="text-xl font-semibold tracking-tight md:text-2xl">{pair?.scopeName ?? "Infinite Mode"}</h1>
         </div>
-        {pair && <PlayStatus play={pair.play} scope={scope} />}
+        {pair && (
+          <div className="flex flex-col gap-1">
+            <PlayStatus play={pair.play} scope={scope} />
+            {pair.allowanceResetsAt && (
+              <p className="text-sm text-zinc-600">
+                Rated allowance resets at midnight Eastern, in{" "}
+                <AllowanceCountdown resetsAt={pair.allowanceResetsAt} renderedAt={now.toISOString()} />.
+              </p>
+            )}
+          </div>
+        )}
       </header>
 
       {pair && needsHumanCheck && <HumanCheck />}

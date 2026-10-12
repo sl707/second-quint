@@ -55,6 +55,16 @@ describe("Rated Infinite Mode picks", () => {
     expect(await pickOnce(player, categoryId, nextMorning)).toBe(true);
   });
 
+  it("come with when the allowance resets, midnight in New York, for a signed-in player only", async () => {
+    const { categoryId } = await createCategory(db, 6);
+    const evening = new Date("2026-03-03T23:00:00-05:00");
+
+    expect((await getInfinitePair(db, await newPlayer(db), categoryId, { now: evening })).allowanceResetsAt).toBe(
+      new Date("2026-03-04T00:00:00-05:00").toISOString(),
+    );
+    expect((await getInfinitePair(db, newVisitor(), categoryId, { now: evening })).allowanceResetsAt).toBeNull();
+  });
+
   it("are unrated and use no allowance when the player chose to play unrated", async () => {
     const { categoryId } = await createCategory(db, 6);
     const player = await newPlayer(db);
