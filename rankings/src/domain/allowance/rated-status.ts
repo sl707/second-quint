@@ -21,9 +21,9 @@ export type RatedStatusInput = {
 /** Whether a tournament would be rated if started now, and why not when it wouldn't. */
 export function tournamentRatedStatus(input: RatedStatusInput): RatedStatus {
   const unrated = (reason: UnratedReason): RatedStatus => ({ rated: false, reason });
+  if (input.handPicked) return unrated("hand-picked");
   if (!input.signedIn) return unrated("signed-out");
   if (input.choseUnrated) return unrated("chose-unrated");
-  if (input.handPicked) return unrated("hand-picked");
   if (input.hasUnfinishedRatedTournament) return unrated("unfinished-rated-tournament");
   if (matchCountFor(input.size) > input.remainingAllowance) return unrated("not-enough-allowance");
   return { rated: true };

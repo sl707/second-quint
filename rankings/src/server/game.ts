@@ -4,7 +4,7 @@ import { unratedReasonMessage, type UnratedReason } from "@/domain/allowance/rat
 import { INFINITE_MODE_MIN_SCOPE, pickInfinitePair, UNJUDGED_RATING } from "@/domain/infinite/pairing";
 import { drawBracket, playBracket, type BracketState, type Random, type Slot } from "@/domain/tournament/bracket";
 import { matchCountFor } from "@/domain/tournament/match-count";
-import { tournamentSizeOptions, type TournamentSizeOptions } from "@/domain/tournament/size";
+import { MIN_TOURNAMENT_SIZE, tournamentSizeOptions, type TournamentSizeOptions } from "@/domain/tournament/size";
 
 /** A signed-out visitor, known by the anonymous visitor ID kept in their browser. */
 export type Visitor = { visitorId: string };
@@ -132,9 +132,39 @@ export async function listTournamentScopes(db: SupabaseClient): Promise<ScopeOpt
   ];
 }
 
+/** The scope's contestants by name, for hand-picking a tournament. */
+export async function listScopeContestants(db: SupabaseClient, categoryId: ScopeId): Promise<ContestantCard[]> {
+  await scopeName(db, categoryId);
+  const cards: ContestantCard[] = [];
+  for (let from = 0; ; from += PAGE) {
+    const rows = check(
+      categoryId === null
+        ? await db
+            .from("contestants")
+            .select("id, name, picture_512_url, picture_128_url")
+            .is("merged_into", null)
+            .order("name")
+            .order("id")
+            .range(from, from + PAGE - 1)
+        : await db
+            .from("contestants")
+            .select("id, name, picture_512_url, picture_128_url, category_memberships!inner(category_id)")
+            .eq("category_memberships.category_id", categoryId)
+            .order("name")
+            .order("id")
+            .range(from, from + PAGE - 1),
+    ) as { id: string; name: string; picture_512_url: string; picture_128_url: string }[];
+    cards.push(...rows.map((c) => ({ id: c.id, name: c.name, picture512Url: c.picture_512_url, picture128Url: c.picture_128_url })));
+    if (rows.length < PAGE) return cards;
+  }
+}
+
 export type StartTournamentOptions = {
   categoryId: ScopeId;
+  /** How many contestants to draw at random; ignored when `contestantIds` hand-picks them. */
   size?: number;
+  /** Hand-picks the tournament's contestants from the scope (at least 4); the tournament is then always unrated. */
+  contestantIds?: string[];
   /** The signed-in player chose to play unrated. */
   unrated?: boolean;
   /** Start only if the tournament will be rated, as the player was told; otherwise throw and start nothing. */
@@ -159,8 +189,14 @@ export async function startTournament(
   const scope = await scopeContestantIds(db, options.categoryId);
   const sizes = tournamentSizeOptions(scope.length);
   if (!sizes) throw new GameError("A tournament needs a scope of at least 4 contestants.");
-  const size = options.size ?? sizes.default;
-  if (!Number.isInteger(size) || size < sizes.min || size > sizes.max) {
+  const handPicked = options.contestantIds !== undefined;
+  const pool = handPicked ? [...new Set(options.contestantIds)] : scope;
+  const size = handPicked ? pool.length : (options.size ?? sizes.default);
+  if (handPicked) {
+    if (size < MIN_TOURNAMENT_SIZE) throw new GameError(`Pick at least ${MIN_TOURNAMENT_SIZE} contestants.`);
+    const inScope = new Set(scope);
+    if (!pool.every((id) => inScope.has(id))) throw new GameError("Pick contestants from the tournament's scope.");
+  } else if (!Number.isInteger(size) || size < sizes.min || size > sizes.max) {
     throw new GameError(`Tournament size must be from ${sizes.min} to ${sizes.max}.`);
   }
 
@@ -174,20 +210,23 @@ export async function startTournament(
       p_visitor_id: signedIn ? null : person.visitorId,
       p_category_id: options.categoryId,
       p_size: matchCountFor(size),
-      p_bracket: { slots: drawBracket(scope, size, random) },
+      p_bracket: { slots: drawBracket(pool, size, random) },
       p_try_rated: signedIn && !choseUnrated,
       p_require_rated: options.expectRated === true,
       p_day: allowanceDay(now),
       p_allowance: allowance,
+      p_hand_picked: handPicked,
     }),
   );
   const unratedReason: UnratedReason | null = started.rated
     ? null
-    : !signedIn
-      ? "signed-out"
-      : choseUnrated
-        ? "chose-unrated"
-        : started.unrated_reason;
+    : handPicked
+      ? "hand-picked"
+      : !signedIn
+        ? "signed-out"
+        : choseUnrated
+          ? "chose-unrated"
+          : started.unrated_reason;
   if (!started.tournament_id) {
     const used = signedIn ? ((await usedAllowance(db, person, allowanceDay(now))).get(options.categoryId) ?? 0) : 0;
     const message = unratedReasonMessage(unratedReason!, { size, remainingAllowance: Math.max(0, allowance - used) });

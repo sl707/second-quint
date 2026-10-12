@@ -2,13 +2,14 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { readPerson } from "@/lib/session";
-import { getAllowanceStatus, listTournamentScopes, listUnfinishedTournaments } from "@/server/game";
+import { getAllowanceStatus, listScopeContestants, listTournamentScopes, listUnfinishedTournaments } from "@/server/game";
 import { UnfinishedTournaments } from "../../unfinished-tournaments";
-import { NewTournamentForm, type AllowanceView } from "./new-tournament-form";
+import { NewTournamentForm, type AllowanceView, type PickingView } from "./new-tournament-form";
 
 export const metadata: Metadata = { title: "New tournament" };
 
-export default async function NewTournamentPage() {
+export default async function NewTournamentPage({ searchParams }: PageProps<"/tournaments/new">) {
+  const { pick } = await searchParams;
   const db = createAdminClient();
   const person = await readPerson();
   const now = new Date();
@@ -17,6 +18,10 @@ export default async function NewTournamentPage() {
     person ? listUnfinishedTournaments(db, person) : [],
     person && "playerId" in person ? getAllowanceStatus(db, person, { now }) : null,
   ]);
+  const pickScope = scopes.find((s) => s.sizes && (s.categoryId ?? "all") === pick);
+  const picking: PickingView | null = pickScope
+    ? { scope: pick as string, contestants: await listScopeContestants(db, pickScope.categoryId) }
+    : null;
   const allowance: AllowanceView | null = status && {
     resetsAt: status.resetsAt,
     renderedAt: now.toISOString(),
@@ -37,7 +42,7 @@ export default async function NewTournamentPage() {
 
       <UnfinishedTournaments tournaments={unfinished} />
 
-      <NewTournamentForm scopes={scopes} allowance={allowance} />
+      <NewTournamentForm scopes={scopes} allowance={allowance} picking={picking} />
     </main>
   );
 }

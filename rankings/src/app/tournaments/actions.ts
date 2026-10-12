@@ -13,11 +13,13 @@ export async function startTournamentAction(_: StartTournamentState, form: FormD
   const size = Number(form.get("size"));
   // Start exactly what the player was told: rated, or unrated (never using allowance they didn't expect to spend).
   const expectRated = form.get("expectRated") === "1";
+  const contestantIds = form.get("mode") === "pick" ? form.getAll("contestant").map(String) : undefined;
   let tournamentId: string;
   try {
     ({ tournamentId } = await startTournament(createAdminClient(), await ensurePerson(), {
       categoryId: scope === "all" ? null : scope,
       size,
+      contestantIds,
       unrated: !expectRated,
       expectRated,
     }));

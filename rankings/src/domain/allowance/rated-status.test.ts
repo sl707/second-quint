@@ -27,6 +27,17 @@ describe("tournamentRatedStatus", () => {
     expect(tournamentRatedStatus({ ...eligible, handPicked: true })).toEqual({ rated: false, reason: "hand-picked" });
   });
 
+  it("gives hand-picked as the reason whatever else would make it unrated", () => {
+    expect(tournamentRatedStatus({ ...eligible, handPicked: true, choseUnrated: true })).toEqual({
+      rated: false,
+      reason: "hand-picked",
+    });
+    expect(tournamentRatedStatus({ ...eligible, handPicked: true, signedIn: false })).toEqual({
+      rated: false,
+      reason: "hand-picked",
+    });
+  });
+
   it("is unrated while another rated tournament is unfinished", () => {
     expect(tournamentRatedStatus({ ...eligible, hasUnfinishedRatedTournament: true })).toEqual({
       rated: false,
