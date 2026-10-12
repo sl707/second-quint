@@ -30,6 +30,9 @@ export type GlobalRanking = {
   notYetJudged: ContestantCard[];
 };
 
+/** One player's ranking, computed on request from their own matches with no fading. */
+export type PersonalRanking = Omit<GlobalRanking, "refreshedAt">;
+
 export type RankingScope = { categoryId: ScopeId; name: string };
 
 function check<T>({ data, error }: { data: T | null; error: unknown }): T {
@@ -171,6 +174,101 @@ export async function listRankingScopes(db: SupabaseClient): Promise<RankingScop
   return [{ categoryId: null, name: OVERALL_RANKING }, ...categories.map((c) => ({ categoryId: c.id, name: c.name }))];
 }
 
+/** The player's Overall Ranking followed by a Category Ranking for each category they've played, by name. */
+export async function listPersonalRankingScopes(db: SupabaseClient, playerId: string): Promise<RankingScope[]> {
+  const matches = await readAll<{ category_id: string }>((from, to) =>
+    db
+      .from("matches")
+      .select("category_id")
+      .eq("player_id", playerId)
+      .eq("excluded", false)
+      .not("category_id", "is", null)
+      .order("id")
+      .range(from, to),
+  );
+  const ids = [...new Set(matches.map((m) => m.category_id))];
+  const categories = ids.length
+    ? (check(await db.from("categories").select("id, name").in("id", ids).order("name")) as { id: string; name: string }[])
+    : [];
+  return [{ categoryId: null, name: OVERALL_RANKING }, ...categories.map((c) => ({ categoryId: c.id, name: c.name }))];
+}
+
+type CardRow = { id: string; name: string; picture_512_url: string; picture_128_url: string };
+
+const CARD_COLUMNS = "id, name, picture_512_url, picture_128_url";
+
+function card(c: CardRow): ContestantCard {
+  return { id: c.id, name: c.name, picture512Url: c.picture_512_url, picture128Url: c.picture_128_url };
+}
+
+/** The scope's contestants by name; null if the category doesn't exist. */
+async function scopeContestants(db: SupabaseClient, categoryId: ScopeId): Promise<{ name: string; cards: CardRow[] } | null> {
+  if (categoryId === null) {
+    const cards = await readAll<CardRow>((from, to) =>
+      db.from("contestants").select(CARD_COLUMNS).is("merged_into", null).order("name").order("id").range(from, to),
+    );
+    return { name: OVERALL_RANKING, cards };
+  }
+  const category = check(await db.from("categories").select("name").eq("id", categoryId).maybeSingle()) as { name: string } | null;
+  if (!category) return null;
+  const members = await readAll<{ contestants: CardRow }>((from, to) =>
+    db
+      .from("category_memberships")
+      .select(`contestants!inner(${CARD_COLUMNS})`)
+      .eq("category_id", categoryId)
+      .order("contestant_id")
+      .range(from, to),
+  );
+  const cards = members.map((m) => m.contestants).sort((a, b) => a.name.localeCompare(b.name) || a.id.localeCompare(b.id));
+  return { name: category.name, cards };
+}
+
+/**
+ * The player's Personal Ranking for a category, or their Overall Ranking, in its rated or unrated
+ * version; null if the category doesn't exist. Computed now from only the player's own counted
+ * matches, every one weighing the same however old, so it reflects their latest pick. Contestants
+ * they haven't judged are listed as not yet judged, never filled in from global ratings.
+ */
+export async function getPersonalRanking(
+  db: SupabaseClient,
+  playerId: string,
+  categoryId: ScopeId,
+  { rated }: { rated: boolean },
+): Promise<PersonalRanking | null> {
+  const [scope, matchRows] = await Promise.all([
+    scopeContestants(db, categoryId),
+    readAll<{ winner_id: string; loser_id: string; played_at: string }>((from, to) => {
+      let query = db.from("matches").select("winner_id, loser_id, played_at").eq("player_id", playerId).eq("excluded", false);
+      if (categoryId !== null) query = query.eq("category_id", categoryId);
+      if (rated) query = query.eq("rated", true);
+      return query.order("id").range(from, to);
+    }),
+  ]);
+  if (!scope) return null;
+
+  const cards = new Map(scope.cards.map((c) => [c.id, card(c)]));
+  const ranking = calculateRanking(
+    matchRows.map((m) => ({ winnerId: m.winner_id, loserId: m.loser_id, playedAt: new Date(m.played_at) })),
+    { contestantIds: [...cards.keys()], halfLifeDays: null, now: new Date() },
+  );
+  return {
+    categoryId,
+    scopeName: scope.name,
+    rated,
+    ranked: ranking.ranked.map((r, i) => ({
+      position: i + 1,
+      contestant: cards.get(r.contestantId)!,
+      rating: r.rating,
+      range: r.range,
+      score: r.score,
+      wins: r.wins,
+      losses: r.losses,
+      matches: r.matches,
+    })),
+    notYetJudged: ranking.notYetJudged.map((id) => cards.get(id)!),
+  };
+}
+
 type EntryRow = {
   position: number;
   judged: boolean;
@@ -180,7 +278,7 @@ type EntryRow = {
   wins: number | null;
   losses: number | null;
   matches: number | null;
-  contestants: { id: string; name: string; picture_512_url: string; picture_128_url: string };
+  contestants: CardRow;
 };
 
 /**
@@ -217,12 +315,6 @@ export async function getGlobalRanking(
       .range(from, to),
   );
 
-  const card = (c: EntryRow["contestants"]): ContestantCard => ({
-    id: c.id,
-    name: c.name,
-    picture512Url: c.picture_512_url,
-    picture128Url: c.picture_128_url,
-  });
   return {
     categoryId,
     scopeName,

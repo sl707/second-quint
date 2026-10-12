@@ -40,17 +40,25 @@ export function newVisitor() {
   return { visitorId };
 }
 
-/** Stores one finished match directly, as if a visitor had picked it in Infinite Mode. */
+/** Stores one finished match directly, as if a visitor (or `playerId`) had picked it in Infinite Mode. */
 export async function recordMatch(
   db: SupabaseClient,
-  match: { winnerId: string; loserId: string; categoryId: string | null; playedAt?: Date; excluded?: boolean; rated?: boolean },
+  match: {
+    winnerId: string;
+    loserId: string;
+    categoryId: string | null;
+    playedAt?: Date;
+    excluded?: boolean;
+    rated?: boolean;
+    playerId?: string;
+  },
 ) {
   const { error } = await db.from("matches").insert({
     rated: match.rated ?? false,
     winner_id: match.winnerId,
     loser_id: match.loserId,
     category_id: match.categoryId,
-    visitor_id: newVisitor().visitorId,
+    ...(match.playerId ? { player_id: match.playerId } : { visitor_id: newVisitor().visitorId }),
     played_at: (match.playedAt ?? new Date()).toISOString(),
     excluded: match.excluded ?? false,
   });

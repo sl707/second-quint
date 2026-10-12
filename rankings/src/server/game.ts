@@ -64,6 +64,18 @@ export type UnfinishedTournament = {
   createdAt: string;
 };
 
+/** A tournament as anyone may see it on its player's profile. */
+export type PastTournament = {
+  id: string;
+  scopeName: string;
+  size: number;
+  rated: boolean;
+  status: TournamentStatus;
+  createdAt: string;
+  /** The tournament ranking once finished; null while in progress or after giving up. */
+  ranking: { place: string; contestants: ContestantCard[] }[] | null;
+};
+
 /** A play rule was broken; the message is safe to show to the person playing. */
 export class GameError extends Error {}
 
@@ -621,6 +633,69 @@ export async function skipInfinitePair(
   );
   if (skipped.outcome === "gone") throw new GameError(PAIR_GONE);
   if (skipped.outcome === "out-of-skips") throw new GameError(OUT_OF_SKIPS);
+}
+
+/** How many of a player's most recent tournaments their profile shows. */
+export const PAST_TOURNAMENTS_SHOWN = 50;
+
+/**
+ * The player's most recent tournaments, newest first, for their public profile: finished ones with
+ * their tournament ranking, the rest without.
+ */
+export async function listPastTournaments(db: SupabaseClient, playerId: string): Promise<PastTournament[]> {
+  const rows = check(
+    await db
+      .from("tournaments")
+      .select("id, size, rated, status, bracket, created_at, categories(name)")
+      .eq("player_id", playerId)
+      .order("created_at", { ascending: false })
+      .order("id")
+      .limit(PAST_TOURNAMENTS_SHOWN),
+  ) as unknown as (Omit<TournamentRow, "category_id" | "can_undo"> & { categories: { name: string } | null })[];
+
+  const finishedIds = rows.filter((t) => t.status === "finished").map((t) => t.id);
+  const picks = new Map<string, { winnerId: string; loserId: string }[]>(finishedIds.map((id) => [id, []]));
+  for (let from = 0; finishedIds.length > 0; from += PAGE) {
+    const batch = check(
+      await db
+        .from("matches")
+        .select("tournamentId:tournament_id, winnerId:winner_id, loserId:loser_id")
+        .in("tournament_id", finishedIds)
+        .order("tournament_id")
+        .order("bracket_match")
+        .range(from, from + PAGE - 1),
+    ) as { tournamentId: string; winnerId: string; loserId: string }[];
+    for (const { tournamentId, ...pick } of batch) picks.get(tournamentId)!.push(pick);
+    if (batch.length < PAGE) break;
+  }
+
+  const rankings = new Map(
+    rows
+      .filter((t) => t.status === "finished")
+      .map((t) => [t.id, playBracket(t.bracket.slots, picks.get(t.id)!).ranking ?? []]),
+  );
+  const ids = [...new Set([...rankings.values()].flatMap((tiers) => tiers.flatMap((tier) => tier.contestantIds)))];
+  const cards = new Map<string, ContestantCard>();
+  for (let i = 0; i < ids.length; i += PAGE) {
+    const batch = check(
+      await db.from("contestants").select("id, name, picture_512_url, picture_128_url").in("id", ids.slice(i, i + PAGE)),
+    ) as { id: string; name: string; picture_512_url: string; picture_128_url: string }[];
+    for (const c of batch) cards.set(c.id, { id: c.id, name: c.name, picture512Url: c.picture_512_url, picture128Url: c.picture_128_url });
+  }
+
+  return rows.map((t) => ({
+    id: t.id,
+    scopeName: t.categories?.name ?? ALL_CONTESTANTS,
+    size: t.size,
+    rated: t.rated,
+    status: t.status,
+    createdAt: t.created_at,
+    ranking:
+      rankings.get(t.id)?.map((tier) => ({
+        place: tier.place,
+        contestants: tier.contestantIds.flatMap((id) => cards.get(id) ?? []),
+      })) ?? null,
+  }));
 }
 
 /** The person's tournaments still in progress, newest first, so they can pick up where they left off. */

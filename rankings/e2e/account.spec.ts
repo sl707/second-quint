@@ -86,6 +86,54 @@ test("a new player picks a display name, sees their profile, plays signed in, an
   await expect(page.getByRole("button", { name: "Sign in with Google" })).toBeVisible();
 });
 
+test("anyone can see a player's personal rankings and past tournaments on their profile", async ({ page, context, baseURL }) => {
+  const user = await signInAsNewUser(context, baseURL!);
+  users.push(user.userId);
+  const displayName = `Player_${randomUUID().slice(0, 8)}`;
+  await admin.from("players").insert({ user_id: user.userId, display_name: displayName });
+
+  await page.goto("/tournaments/new");
+  await page.getByRole("radio", { name: /Dog breeds/ }).check();
+  await page.getByLabel("Size").fill("4");
+  await page.getByRole("button", { name: "Start tournament" }).click();
+  for (const left of [3, 2, 1]) {
+    await page.getByRole("button", { name: /^Pick / }).first().click();
+    await expect(page.getByText(`${left} ${left === 1 ? "match" : "matches"} left`)).toBeVisible();
+  }
+  await page.getByRole("button", { name: /^Pick / }).first().click();
+  await expect(page.getByText("Finished", { exact: true })).toBeVisible();
+
+  await page.goto("/tournaments/new");
+  await page.getByRole("radio", { name: /Dog breeds/ }).check();
+  await page.getByLabel("Size").fill("4");
+  await page.getByLabel("Play unrated").check();
+  await page.getByRole("button", { name: "Start tournament" }).click();
+  await page.getByRole("button", { name: /^Pick / }).first().click();
+  await expect(page.getByText("3 matches left")).toBeVisible();
+
+  // Straight away, without a ranking refresh, and signed out.
+  const stranger = await context.browser()!.newPage();
+  await stranger.goto(`/players/${displayName}`);
+  const versions = stranger.getByRole("navigation", { name: "Ranking version" });
+  await expect(versions.getByRole("link", { name: "Rated", exact: true })).toHaveAttribute("aria-current", "page");
+  await expect(stranger.getByRole("list", { name: "Overall Ranking" }).getByRole("listitem")).toHaveCount(4);
+  await expect(stranger.getByRole("heading", { name: "Not yet judged" })).toBeVisible();
+
+  await stranger.getByRole("navigation", { name: "Personal ranking scope" }).getByRole("link", { name: "Dog breeds" }).click();
+  await expect(stranger.getByRole("list", { name: "Dog breeds" }).getByRole("listitem")).toHaveCount(4);
+  await versions.getByRole("link", { name: "Unrated", exact: true }).click();
+  await expect(stranger).toHaveURL(/scope=.*version=unrated/);
+  await expect(versions.getByRole("link", { name: "Unrated", exact: true })).toHaveAttribute("aria-current", "page");
+  await expect(stranger.getByRole("list", { name: "Dog breeds" }).getByRole("listitem").first()).toContainText("Score");
+
+  const past = stranger.getByRole("list", { name: "Past tournaments" }).getByRole("listitem").filter({ hasText: "Dog breeds" });
+  await expect(past.first()).toContainText(/Unrated.*In progress/);
+  await expect(past.nth(1)).toContainText(/Rated.*Winner: /);
+  await past.nth(1).getByText(/Winner: /).click();
+  await expect(past.nth(1).getByRole("list", { name: "Tournament ranking" }).getByRole("listitem")).toHaveText([/^1st/, /^2nd/, /^3rd/, /^4th/]);
+  await stranger.close();
+});
+
 test("a player is reminded of an unfinished rated tournament, resumes it, and gives it up", async ({ page, context, baseURL }) => {
   const user = await signInAsNewUser(context, baseURL!);
   users.push(user.userId);

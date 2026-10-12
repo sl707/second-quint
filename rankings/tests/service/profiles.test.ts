@@ -2,8 +2,10 @@ import { createClient } from "@supabase/supabase-js";
 import { afterAll, describe, expect, it } from "vitest";
 import { publicEnv } from "@/lib/env";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { getTournament, listPastTournaments, pickWinner, startTournament } from "@/server/game";
 import { chooseDisplayName, findPlayerByUser, getProfile, ProfileError } from "@/server/profiles";
-import { newUser, removeTestData, uniqueDisplayName } from "./fixtures";
+import { getPersonalRanking, listPersonalRankingScopes } from "@/server/rankings";
+import { createCategory, newPlayer, newUser, recordMatch, removeTestData, uniqueDisplayName } from "./fixtures";
 
 const db = createAdminClient();
 const anyone = createClient(publicEnv.supabaseUrl, publicEnv.supabasePublishableKey, {
@@ -91,5 +93,44 @@ describe("profiles", () => {
     expect(data).toEqual([{ id: player.id, display_name: player.displayName }]);
     expect((await anyone.from("players").select("user_id").limit(1)).error).not.toBeNull();
     expect((await anyone.from("players").insert({ display_name: "sneaky" })).error).not.toBeNull();
+  });
+
+  it("show anyone the player's past tournaments, newest first: finished with their ranking, unfinished as in progress", async () => {
+    const { categoryId } = await createCategory(db, 4);
+    const player = await newPlayer(db);
+    const someoneElse = await newPlayer(db);
+    const finished = await startTournament(db, player, { categoryId, size: 4, unrated: true });
+    for (let i = 0; i < 4; i++) {
+      const next = (await getTournament(db, player, finished.tournamentId))!.bracket.next!;
+      await pickWinner(db, player, finished.tournamentId, next.contestantIds[0]);
+    }
+    const unfinished = await startTournament(db, player, { categoryId, size: 4 });
+    const next = (await getTournament(db, player, unfinished.tournamentId))!.bracket.next!;
+    await pickWinner(db, player, unfinished.tournamentId, next.contestantIds[0]);
+    await startTournament(db, someoneElse, { categoryId, size: 4 });
+
+    const tournaments = await listPastTournaments(anyone, player.playerId);
+
+    expect(tournaments.map((t) => [t.id, t.status, t.rated])).toEqual([
+      [unfinished.tournamentId, "in_progress", true],
+      [finished.tournamentId, "finished", false],
+    ]);
+    expect(tournaments[0].ranking).toBeNull();
+    const played = (await getTournament(db, player, finished.tournamentId))!;
+    expect(tournaments[1]).toMatchObject({ scopeName: played.scopeName, size: 4 });
+    expect(tournaments[1].ranking?.map((tier) => [tier.place, tier.contestants.map((c) => c.id)])).toEqual(
+      played.bracket.ranking!.map((tier) => [tier.place, tier.contestantIds]),
+    );
+    expect(tournaments[1].ranking?.[0].contestants[0]).toEqual(played.contestants[played.bracket.ranking![0].contestantIds[0]]);
+  });
+
+  it("show anyone the player's personal rankings", async () => {
+    const { categoryId, contestantIds } = await createCategory(db, 2);
+    const player = await newPlayer(db);
+    await recordMatch(db, { winnerId: contestantIds[1], loserId: contestantIds[0], categoryId, playerId: player.playerId });
+
+    expect((await listPersonalRankingScopes(anyone, player.playerId)).map((s) => s.categoryId)).toEqual([null, categoryId]);
+    const ranking = await getPersonalRanking(anyone, player.playerId, categoryId, { rated: false });
+    expect(ranking?.ranked.map((r) => r.contestant.id)).toEqual([contestantIds[1], contestantIds[0]]);
   });
 });

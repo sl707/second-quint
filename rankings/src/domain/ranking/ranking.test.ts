@@ -94,6 +94,17 @@ describe("calculateRanking", () => {
     expect(unfaded.ranked[0]).toMatchObject({ wins: 10, losses: 5, matches: 15 });
   });
 
+  it("without fading, as personal rankings use, weighs a year-old match exactly like today's", () => {
+    const options = { contestantIds: ["a", "b", "c"], halfLifeDays: null, now: NOW };
+    const recent = calculateRanking([match("a", "b"), match("b", "c"), match("c", "a"), match("a", "c")], options);
+    const aged = calculateRanking(
+      [match("a", "b", daysAgo(365)), match("b", "c"), match("c", "a", daysAgo(400)), match("a", "c")],
+      options,
+    );
+
+    expect(aged).toEqual(recent);
+  });
+
   it("lists contestants in the scope with no matches as not yet judged", () => {
     const ranking = calculateRanking([match("a", "b"), match("a", "outsider")], {
       contestantIds: ["a", "b", "unseen", "also-unseen"],
