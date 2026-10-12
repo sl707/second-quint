@@ -42,7 +42,7 @@ export function unratedReasonMessage(
     case "hand-picked":
       return "Hand-picked tournaments are always unrated.";
     case "unfinished-rated-tournament":
-      return "You already have an unfinished rated tournament. Finish it to start another rated one.";
+      return "You already have an unfinished rated tournament. Finish it or give it up to start another rated one.";
     case "not-enough-allowance":
       return `Its ${matchCountFor(size)} matches don't fit in your remaining rated allowance for this scope today (${remainingAllowance} left).`;
   }

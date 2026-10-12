@@ -4,7 +4,7 @@ import { refresh } from "next/cache";
 import { redirect } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { ensurePerson, readPerson } from "@/lib/session";
-import { GameError, pickWinner, startTournament, undoLastPick } from "@/server/game";
+import { GameError, giveUpTournament, pickWinner, startTournament, undoLastPick } from "@/server/game";
 
 export type StartTournamentState = { error: string | null };
 
@@ -51,4 +51,10 @@ export async function undoLastPickAction(tournamentId: string) {
   const person = await readPerson();
   if (!person) return;
   await play(() => undoLastPick(createAdminClient(), person, tournamentId));
+}
+
+export async function giveUpTournamentAction(tournamentId: string) {
+  const person = await readPerson();
+  if (!person) return;
+  await play(() => giveUpTournament(createAdminClient(), person, tournamentId));
 }

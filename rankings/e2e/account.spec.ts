@@ -85,3 +85,38 @@ test("a new player picks a display name, sees their profile, plays signed in, an
   await page.getByRole("button", { name: "Sign out" }).click();
   await expect(page.getByRole("button", { name: "Sign in with Google" })).toBeVisible();
 });
+
+test("a player is reminded of an unfinished rated tournament, resumes it, and gives it up", async ({ page, context, baseURL }) => {
+  const user = await signInAsNewUser(context, baseURL!);
+  users.push(user.userId);
+  const displayName = `Player_${randomUUID().slice(0, 8)}`;
+  await admin.from("players").insert({ user_id: user.userId, display_name: displayName });
+
+  await page.goto("/tournaments/new");
+  await page.getByRole("radio", { name: /Dog breeds/ }).check();
+  await page.getByLabel("Size").fill("4");
+  await page.getByRole("button", { name: "Start tournament" }).click();
+  await page.getByRole("button", { name: /^Pick / }).first().click();
+  await expect(page.getByText("3 matches left")).toBeVisible();
+  const tournamentUrl = page.url();
+
+  await page.goto(`/players/${displayName}`);
+  await expect(page.getByRole("link", { name: /Dog breeds.*Rated.*Resume · 3 left/ })).toBeVisible();
+
+  await page.goto("/");
+  await page.getByRole("link", { name: /Dog breeds.*Rated.*Resume · 3 left/ }).click();
+  await expect(page).toHaveURL(tournamentUrl);
+
+  await page.getByText("Give up", { exact: true }).click();
+  await page.getByRole("button", { name: "Give up this tournament" }).click();
+  await expect(page.getByText("Given up", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: /^Pick / })).toHaveCount(0);
+
+  await page.goto("/");
+  await expect(page.getByRole("heading", { name: "Unfinished tournaments" })).toHaveCount(0);
+  await page.goto("/tournaments/new");
+  await page.getByRole("radio", { name: /Dog breeds/ }).check();
+  await page.getByLabel("Size").fill("4");
+  await expect(page.getByRole("radio", { name: /Dog breeds/ })).toHaveAccessibleName(/16 of 20 rated matches left today/);
+  await expect(page.getByRole("status")).toContainText("This tournament will be rated.");
+});

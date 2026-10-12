@@ -58,6 +58,7 @@ export type UnfinishedTournament = {
   id: string;
   scopeName: string;
   size: number;
+  rated: boolean;
   matchesLeft: number;
   createdAt: string;
 };
@@ -338,8 +339,27 @@ export async function pickWinner(
         status: finished ? "finished" : "in_progress",
         finished_at: finished ? new Date().toISOString() : null,
       })
-      .eq("id", row.id),
+      .eq("id", row.id)
+      .eq("status", "in_progress"),
   );
+}
+
+/**
+ * Ends the player's unfinished rated tournament early. Its played matches stay counted, it gets no
+ * tournament ranking, and its reserved allowance stays spent, so the player can start another.
+ */
+export async function giveUpTournament(db: SupabaseClient, person: Person, tournamentId: string): Promise<void> {
+  const ended = check(
+    await db
+      .from("tournaments")
+      .update({ status: "given_up", can_undo: false, finished_at: new Date().toISOString() })
+      .eq("id", tournamentId)
+      .match(ownedBy(person))
+      .eq("rated", true)
+      .eq("status", "in_progress")
+      .select("id"),
+  );
+  if (ended.length === 0) throw new GameError("Only an unfinished rated tournament can be given up.");
 }
 
 /** Takes back the person's most recent pick, once, as long as they haven't picked the next match. */
@@ -355,6 +375,7 @@ export async function undoLastPick(db: SupabaseClient, person: Person, tournamen
       .update({ can_undo: false, status: "in_progress", finished_at: null })
       .eq("id", row.id)
       .eq("can_undo", true)
+      .neq("status", "given_up")
       .select("id"),
   );
   if (claimed.length === 0) throw new GameError("There's no pick to undo.");
@@ -373,13 +394,14 @@ export async function listUnfinishedTournaments(db: SupabaseClient, person: Pers
   const rows = check(
     await db
       .from("tournaments")
-      .select("id, size, created_at, categories(name), matches(count)")
+      .select("id, size, rated, created_at, categories(name), matches(count)")
       .match(ownedBy(person))
       .eq("status", "in_progress")
       .order("created_at", { ascending: false }),
   ) as unknown as {
     id: string;
     size: number;
+    rated: boolean;
     created_at: string;
     categories: { name: string } | null;
     matches: { count: number }[];
@@ -389,6 +411,7 @@ export async function listUnfinishedTournaments(db: SupabaseClient, person: Pers
     id: t.id,
     scopeName: t.categories?.name ?? ALL_CONTESTANTS,
     size: t.size,
+    rated: t.rated,
     matchesLeft: t.size - (t.matches[0]?.count ?? 0),
     createdAt: t.created_at,
   }));

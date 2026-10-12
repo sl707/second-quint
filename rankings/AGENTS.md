@@ -46,7 +46,7 @@ The ranking refresher (`refreshGlobalRankings` in `src/server/rankings.ts`) reco
 
 ### Rated allowance
 
-The allowance size and the New York day boundaries are pure (`src/domain/allowance/`); `tournamentRatedStatus` decides rated or unrated with the reason, and the start page uses it to tell the player before starting. The game service enforces it in the `start_tournament` SQL function, which locks the player's row so the one-unfinished-rated-tournament check and the reservation in `allowance_use` (per player, scope, and day; only ever added to) can't race. Service functions take an optional `now` so tests can cross midnight.
+The allowance size and the New York day boundaries are pure (`src/domain/allowance/`); `tournamentRatedStatus` decides rated or unrated with the reason, and the start page uses it to tell the player before starting. The game service enforces it in the `start_tournament` SQL function, which locks the player's row so the one-unfinished-rated-tournament check and the reservation in `allowance_use` (per player, scope, and day; only ever added to) can't race. Service functions take an optional `now` so tests can cross midnight. Picks never touch `allowance_use`, so a rated tournament resumed on a later day stays rated for free. `giveUpTournament` sets status `given_up` (only from an unfinished rated tournament) and refunds nothing; `pickWinner` and `undoLastPick` only update unfinished tournaments, so they can't revive one. `UnfinishedTournaments` (`src/app/unfinished-tournaments.tsx`) is the resume banner on the home page, the player's own profile, and the start page.
 
 ### Catalog and pictures
 

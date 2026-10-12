@@ -10,7 +10,8 @@ export function roundName(round: number, roundCount: number): string {
 }
 
 export function BracketView({ tournament }: { tournament: Tournament }) {
-  const { rounds, thirdPlace, next } = tournament.bracket;
+  const { rounds, thirdPlace } = tournament.bracket;
+  const next = tournament.status === "in_progress" ? tournament.bracket.next : null;
   const isNext = (match: BracketMatch) =>
     !!next && !match.winnerId && match.contestantIds[0] === next.contestantIds[0] && match.contestantIds[1] === next.contestantIds[1];
 
