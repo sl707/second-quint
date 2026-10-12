@@ -4,6 +4,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { createVisitorClient } from "@/lib/supabase/server";
 import { getAppName } from "@/server/app-info";
 import { listUnfinishedTournaments } from "@/server/game";
+import { readVariant } from "@/lib/prototype-variant-server";
+import { VariantArcade, VariantEditorial, VariantGacha } from "./home-variants";
 import { UnfinishedTournaments } from "./unfinished-tournaments";
 
 export default async function Home() {
@@ -12,6 +14,11 @@ export default async function Home() {
     getAppName(await createVisitorClient()),
     person ? listUnfinishedTournaments(createAdminClient(), person) : [],
   ]);
+
+  const variant = await readVariant();
+  if (variant === "A") return <VariantArcade appName={appName} unfinished={unfinished} />;
+  if (variant === "B") return <VariantGacha appName={appName} unfinished={unfinished} />;
+  if (variant === "C") return <VariantEditorial appName={appName} unfinished={unfinished} />;
 
   return (
     <main className="mx-auto flex w-full max-w-xl flex-1 flex-col gap-4 px-5 py-10">
