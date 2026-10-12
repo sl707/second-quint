@@ -134,6 +134,20 @@ test("anyone can see a player's personal rankings and past tournaments on their 
   await stranger.close();
 });
 
+test("a signed-out visitor searches for a player and opens their profile", async ({ page }) => {
+  const created = await admin.auth.admin.createUser({ email: `e2e-${randomUUID()}@example.test`, email_confirm: true });
+  users.push(created.data.user!.id);
+  const displayName = `Findme_${randomUUID().slice(0, 8)}`;
+  await admin.from("players").insert({ user_id: created.data.user!.id, display_name: displayName });
+
+  await page.goto("/");
+  await page.getByRole("navigation", { name: "Account" }).getByRole("link", { name: "Players" }).click();
+  await page.getByRole("searchbox", { name: "Display name" }).fill(displayName.slice(0, 12).toLowerCase());
+  await page.getByRole("button", { name: "Search" }).click();
+  await page.getByRole("list", { name: "Players found" }).getByRole("link", { name: displayName }).click();
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText(displayName);
+});
+
 test("a player is reminded of an unfinished rated tournament, resumes it, and gives it up", async ({ page, context, baseURL }) => {
   const user = await signInAsNewUser(context, baseURL!);
   users.push(user.userId);

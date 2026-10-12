@@ -21,6 +21,9 @@ export async function SiteHeader() {
 
   return (
     <nav aria-label="Account" className="flex items-center justify-end gap-1 border-b border-zinc-200 bg-white px-4 py-2">
+      <Link href="/players" className={buttonClass}>
+        Players
+      </Link>
       {session.status === "player" ? (
         <>
           {admin && (

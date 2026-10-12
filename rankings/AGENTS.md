@@ -50,7 +50,7 @@ The ranking refresher (`refreshGlobalRankings` in `src/server/rankings.ts`) reco
 
 ### Personal rankings and profiles
 
-`getPersonalRanking` (`src/server/rankings.ts`) computes a player's personal ranking on every request from only their own non-excluded matches, with no fading (`halfLifeDays: null`); nothing is stored and the refresher isn't involved. `listPersonalRankingScopes` lists Overall plus the categories they've played. The profile (`/players/[name]`, `?scope=<category ID>`, `?version=unrated`) shows these and `listPastTournaments` (`src/server/game.ts`, latest 50) to anyone through the visitor client.
+`getPersonalRanking` (`src/server/rankings.ts`) computes a player's personal ranking on every request from only their own non-excluded matches, with no fading (`halfLifeDays: null`); nothing is stored and the refresher isn't involved. `listPersonalRankingScopes` lists Overall plus the categories they've played. The profile (`/players/[name]`, `?scope=<category ID>`, `?version=unrated`) shows these and `listPastTournaments` (`src/server/game.ts`, latest 50) to anyone through the visitor client. `/players` (`?q=`, linked as "Players" in the header) is the player search: `searchPlayers` (`src/server/profiles.ts`) matches the start of display names ignoring case (`_` is literal), at most 20 in name order, never banned players or the deleted-player tombstone.
 
 ### Rated allowance
 

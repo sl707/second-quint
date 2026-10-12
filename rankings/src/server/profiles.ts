@@ -52,6 +52,29 @@ export async function deleteAccount(db: SupabaseClient, player: SignedInPlayer):
   if (error) throw error;
 }
 
+/** How many players a search lists at once, by display name. */
+export const SEARCH_RESULTS_SHOWN = 20;
+
+/**
+ * Players whose display name starts with `query`, ignoring case, in display-name order. Banned
+ * players and deleted accounts never show up.
+ */
+export async function searchPlayers(db: SupabaseClient, query: string): Promise<Player[]> {
+  const prefix = query.trim().toLowerCase();
+  // Only these characters can be in a display name; `_` is a LIKE wildcard, so it's escaped.
+  if (!/^[a-z0-9_-]+$/.test(prefix)) return [];
+  return check(
+    await db
+      .from("players")
+      .select(PUBLIC_COLUMNS)
+      .not("display_name", "is", null)
+      .eq("banned", false)
+      .ilike("display_name", `${prefix.replaceAll("_", "\\_")}%`)
+      .order("display_name")
+      .limit(SEARCH_RESULTS_SHOWN),
+  ) as Player[];
+}
+
 /** The player whose profile is at `idOrDisplayName` (a player ID, or a display name in any case). */
 export async function getProfile(db: SupabaseClient, idOrDisplayName: string): Promise<Player | null> {
   // The deleted-player tombstone has no display name and no profile.

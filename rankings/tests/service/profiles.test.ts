@@ -1,11 +1,13 @@
+import { randomUUID } from "node:crypto";
 import { createClient } from "@supabase/supabase-js";
 import { afterAll, describe, expect, it } from "vitest";
 import { publicEnv } from "@/lib/env";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { banPlayer } from "@/server/admin";
 import { getTournament, listPastTournaments, pickWinner, startTournament } from "@/server/game";
-import { chooseDisplayName, findPlayerByUser, getProfile, ProfileError } from "@/server/profiles";
+import { chooseDisplayName, deleteAccount, findPlayerByUser, getProfile, ProfileError, searchPlayers } from "@/server/profiles";
 import { getPersonalRanking, listPersonalRankingScopes } from "@/server/rankings";
-import { createCategory, newPlayer, newUser, recordMatch, removeTestData, uniqueDisplayName } from "./fixtures";
+import { createCategory, makeAdmin, newPlayer, newUser, recordMatch, removeTestData, uniqueDisplayName } from "./fixtures";
 
 const db = createAdminClient();
 const anyone = createClient(publicEnv.supabaseUrl, publicEnv.supabasePublishableKey, {
@@ -122,6 +124,36 @@ describe("profiles", () => {
       played.bracket.ranking!.map((tier) => [tier.place, tier.contestantIds]),
     );
     expect(tournaments[1].ranking?.[0].contestants[0]).toEqual(played.contestants[played.bracket.ranking![0].contestantIds[0]]);
+  });
+
+  it("lets anyone search players by the start of their display name, ignoring case", async () => {
+    const tag = randomUUID().slice(0, 6);
+    const choose = async (name: string) => chooseDisplayName(db, (await newUser(db)).userId, name);
+    const alpha = await choose(`Srch${tag}_Alpha`);
+    const beta = await choose(`srch${tag}-beta`);
+    await choose(`x_srch${tag}`);
+    await choose(`Srch${tag}xAlpha`);
+
+    const found = await searchPlayers(anyone, `SRCH${tag}`);
+    expect(found.map((p) => p.displayName).sort()).toEqual([alpha.displayName, beta.displayName, `Srch${tag}xAlpha`].sort());
+    expect(found.find((p) => p.id === alpha.id)).toEqual(alpha);
+    // An underscore is a letter of the name, not a wildcard.
+    expect((await searchPlayers(anyone, `srch${tag}_`)).map((p) => p.id)).toEqual([alpha.id]);
+    expect(await searchPlayers(anyone, "  ")).toEqual([]);
+    expect(await searchPlayers(anyone, "%")).toEqual([]);
+  });
+
+  it("leaves banned players and deleted accounts out of the search", async () => {
+    const tag = randomUUID().slice(0, 6);
+    const admin = await newPlayer(db);
+    await makeAdmin(db, admin.playerId);
+    const banned = await chooseDisplayName(db, (await newUser(db)).userId, `Ban${tag}_one`);
+    const kept = await chooseDisplayName(db, (await newUser(db)).userId, `Ban${tag}_two`);
+    await banPlayer(db, admin, banned.id, { removeMatches: false });
+
+    expect((await searchPlayers(anyone, `ban${tag}`)).map((p) => p.id)).toEqual([kept.id]);
+    await deleteAccount(db, { playerId: kept.id });
+    expect(await searchPlayers(anyone, `ban${tag}`)).toEqual([]);
   });
 
   it("show anyone the player's personal rankings", async () => {
