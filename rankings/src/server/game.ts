@@ -1,5 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { allowanceDay, nextAllowanceReset, ratedAllowance } from "@/domain/allowance/allowance";
+import { allowanceDay, nextAllowanceReset, RATED_SKIPS_PER_DAY, ratedAllowance } from "@/domain/allowance/allowance";
 import { unratedReasonMessage, type UnratedReason } from "@/domain/allowance/rated-status";
 import { INFINITE_MODE_MIN_SCOPE, pickInfinitePair, UNJUDGED_RATING } from "@/domain/infinite/pairing";
 import { drawBracket, playBracket, type BracketState, type Random, type Slot } from "@/domain/tournament/bracket";
@@ -390,11 +390,19 @@ export async function undoLastPick(db: SupabaseClient, person: Person, tournamen
   );
 }
 
+export type InfiniteUnratedReason = "signed-out" | "chose-unrated" | "allowance-used-up";
+
+/** Whether picking from the pair now would be rated, with what's left today, or why not. */
+export type InfinitePlayStatus =
+  | { rated: true; ratedPicksLeft: number; ratedSkipsLeft: number }
+  | { rated: false; reason: InfiniteUnratedReason };
+
 export type InfinitePair = {
   pairId: string;
   categoryId: ScopeId;
   scopeName: string;
   contestants: [ContestantCard, ContestantCard];
+  play: InfinitePlayStatus;
 };
 
 export type InfinitePick = { rated: boolean };
@@ -410,13 +418,14 @@ function inScope(categoryId: ScopeId) {
   return ["category_id", categoryId === null ? "is" : "eq", categoryId] as const;
 }
 
-async function offeredPair(db: SupabaseClient, person: Person, categoryId: ScopeId) {
+async function offeredPair(db: SupabaseClient, person: Person, categoryId: ScopeId, choseUnrated: boolean) {
   return check(
     await db
       .from("infinite_pairs")
       .select(INFINITE_PAIR_COLUMNS)
       .match(ownedBy(person))
       .filter(...inScope(categoryId))
+      .eq("chose_unrated", choseUnrated)
       // A fresh signal opts out of Next.js memoizing identical GETs within one render, so a pair
       // offered moments ago by this same render is seen.
       .abortSignal(new AbortController().signal)
@@ -473,13 +482,18 @@ export async function getInfinitePair(
   db: SupabaseClient,
   person: Person,
   categoryId: ScopeId,
-  { random = Math.random }: { random?: Random } = {},
+  {
+    random = Math.random,
+    unrated = false,
+    now = new Date(),
+  }: { random?: Random; /** The signed-in player chose to play unrated. */ unrated?: boolean; now?: Date } = {},
 ): Promise<InfinitePair> {
+  const choseUnrated = "playerId" in person && unrated;
   const name = await scopeName(db, categoryId);
   const scope = await scopeContestantIds(db, categoryId);
   if (scope.length < INFINITE_MODE_MIN_SCOPE) throw new GameError("Infinite Mode needs a scope of at least 2 contestants.");
 
-  let row = await offeredPair(db, person, categoryId);
+  let row = await offeredPair(db, person, categoryId, choseUnrated);
   if (row && !(scope.includes(row.first_contestant_id) && scope.includes(row.second_contestant_id))) {
     check(await db.from("infinite_pairs").delete().eq("id", row.id));
     row = null;
@@ -488,12 +502,18 @@ export async function getInfinitePair(
     const [first, second] = await drawInfinitePair(db, scope, categoryId, random);
     const { data, error } = await db
       .from("infinite_pairs")
-      .insert({ ...ownerColumns(person), category_id: categoryId, first_contestant_id: first, second_contestant_id: second })
+      .insert({
+        ...ownerColumns(person),
+        category_id: categoryId,
+        chose_unrated: choseUnrated,
+        first_contestant_id: first,
+        second_contestant_id: second,
+      })
       .select(INFINITE_PAIR_COLUMNS)
       .single();
     if (error && error.code !== "23505") throw error;
     // On a conflict another request offered a pair first; offer that one.
-    row = data ?? (await offeredPair(db, person, categoryId))!;
+    row = data ?? (await offeredPair(db, person, categoryId, choseUnrated))!;
   }
 
   const ids = [row.first_contestant_id, row.second_contestant_id];
@@ -504,48 +524,103 @@ export async function getInfinitePair(
     const c = cards.find((c) => c.id === id)!;
     return { id: c.id, name: c.name, picture512Url: c.picture_512_url, picture128Url: c.picture_128_url };
   };
-  return { pairId: row.id, categoryId, scopeName: name, contestants: [card(ids[0]), card(ids[1])] };
+  const play = await infinitePlayStatus(db, person, categoryId, { choseUnrated, scopeSize: scope.length, now });
+  return { pairId: row.id, categoryId, scopeName: name, contestants: [card(ids[0]), card(ids[1])], play };
 }
 
-/** Takes the person's offered pair off the table, so it can be picked or skipped only once. */
-async function claimInfinitePair(db: SupabaseClient, person: Person, pairId: string, winnerId?: string) {
-  const gone = new GameError("That pair was already picked or skipped.");
-  if (!UUID.test(pairId)) throw gone;
+async function infinitePlayStatus(
+  db: SupabaseClient,
+  person: Person,
+  categoryId: ScopeId,
+  { choseUnrated, scopeSize, now }: { choseUnrated: boolean; scopeSize: number; now: Date },
+): Promise<InfinitePlayStatus> {
+  if (!("playerId" in person)) return { rated: false, reason: "signed-out" };
+  if (choseUnrated) return { rated: false, reason: "chose-unrated" };
+  const day = allowanceDay(now);
+  const [used, skips] = await Promise.all([
+    usedAllowance(db, person, day),
+    db.from("skip_use").select("used").eq("player_id", person.playerId).eq("day", day).maybeSingle(),
+  ]);
+  const allowance = ratedAllowance({ allContestants: categoryId === null, contestantCount: scopeSize });
+  const ratedPicksLeft = Math.max(0, allowance - (used.get(categoryId) ?? 0));
+  if (ratedPicksLeft === 0) return { rated: false, reason: "allowance-used-up" };
+  const skipsUsed = (check(skips) as { used: number } | null)?.used ?? 0;
+  return { rated: true, ratedPicksLeft, ratedSkipsLeft: Math.max(0, RATED_SKIPS_PER_DAY - skipsUsed) };
+}
+
+const PAIR_GONE = "That pair was already picked or skipped.";
+const OUT_OF_SKIPS = `You've used your ${RATED_SKIPS_PER_DAY} rated skips for today. Pick a winner, or play unrated to skip freely.`;
+
+/** The person's offered pair with that ID, or a `GameError` if it was already picked or skipped. */
+async function requireOfferedPair(db: SupabaseClient, person: Person, pairId: string) {
+  if (!UUID.test(pairId)) throw new GameError(PAIR_GONE);
   const row = check(
     await db.from("infinite_pairs").select(INFINITE_PAIR_COLUMNS).eq("id", pairId).match(ownedBy(person)).maybeSingle(),
   ) as InfinitePairRow | null;
-  if (!row) throw gone;
-  if (winnerId !== undefined && winnerId !== row.first_contestant_id && winnerId !== row.second_contestant_id) {
-    throw new GameError("That contestant isn't in the current pair.");
-  }
-  const claimed = check(await db.from("infinite_pairs").delete().eq("id", row.id).select("id"));
-  if (claimed.length === 0) throw gone;
+  if (!row) throw new GameError(PAIR_GONE);
   return row;
 }
 
-/** Records the person's pick from their offered Infinite Mode pair as a match in the pair's scope. */
+/** The player's rated allowance per day in the scope. */
+async function scopeAllowance(db: SupabaseClient, categoryId: ScopeId): Promise<number> {
+  const { count, error } =
+    categoryId === null
+      ? await db.from("contestants").select("id", { count: "exact", head: true }).is("merged_into", null)
+      : await db.from("category_memberships").select("contestant_id", { count: "exact", head: true }).eq("category_id", categoryId);
+  if (error) throw error;
+  return ratedAllowance({ allContestants: categoryId === null, contestantCount: count ?? 0 });
+}
+
+/**
+ * Records the person's pick from their offered Infinite Mode pair as a match in the pair's scope.
+ * It's rated, and uses one allowance, when a signed-in player has allowance left in the scope today.
+ */
 export async function pickInfiniteWinner(
   db: SupabaseClient,
   person: Person,
   { pairId, winnerId }: { pairId: string; winnerId: string },
+  { now = new Date() }: { now?: Date } = {},
 ): Promise<InfinitePick> {
-  const row = await claimInfinitePair(db, person, pairId, winnerId);
-  const rated = false;
-  check(
-    await db.from("matches").insert({
-      winner_id: winnerId,
-      loser_id: winnerId === row.first_contestant_id ? row.second_contestant_id : row.first_contestant_id,
-      category_id: row.category_id,
-      ...ownerColumns(person),
-      rated,
+  const row = await requireOfferedPair(db, person, pairId);
+  if (winnerId !== row.first_contestant_id && winnerId !== row.second_contestant_id) {
+    throw new GameError("That contestant isn't in the current pair.");
+  }
+  const signedIn = "playerId" in person;
+  const [picked] = check<{ claimed: boolean; rated: boolean }[]>(
+    await db.rpc("pick_infinite_pair", {
+      p_pair_id: row.id,
+      p_player_id: signedIn ? person.playerId : null,
+      p_visitor_id: signedIn ? null : person.visitorId,
+      p_winner_id: winnerId,
+      p_day: allowanceDay(now),
+      p_allowance: signedIn ? await scopeAllowance(db, row.category_id) : 0,
     }),
   );
-  return { rated };
+  if (!picked.claimed) throw new GameError(PAIR_GONE);
+  return { rated: picked.rated };
 }
 
 /** Passes on the person's offered Infinite Mode pair without recording a match. */
-export async function skipInfinitePair(db: SupabaseClient, person: Person, { pairId }: { pairId: string }): Promise<void> {
-  await claimInfinitePair(db, person, pairId);
+export async function skipInfinitePair(
+  db: SupabaseClient,
+  person: Person,
+  { pairId }: { pairId: string },
+  { now = new Date() }: { now?: Date } = {},
+): Promise<void> {
+  const row = await requireOfferedPair(db, person, pairId);
+  const signedIn = "playerId" in person;
+  const [skipped] = check<{ outcome: "skipped" | "gone" | "out-of-skips" }[]>(
+    await db.rpc("skip_infinite_pair", {
+      p_pair_id: row.id,
+      p_player_id: signedIn ? person.playerId : null,
+      p_visitor_id: signedIn ? null : person.visitorId,
+      p_day: allowanceDay(now),
+      p_allowance: signedIn ? await scopeAllowance(db, row.category_id) : 0,
+      p_skip_limit: RATED_SKIPS_PER_DAY,
+    }),
+  );
+  if (skipped.outcome === "gone") throw new GameError(PAIR_GONE);
+  if (skipped.outcome === "out-of-skips") throw new GameError(OUT_OF_SKIPS);
 }
 
 /** The person's tournaments still in progress, newest first, so they can pick up where they left off. */

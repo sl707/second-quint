@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { readPerson } from "@/lib/session";
+import { RATED_SKIPS_PER_DAY } from "@/domain/allowance/allowance";
 import { GameError, getInfinitePair, type InfinitePair } from "@/server/game";
 import { startInfiniteModeAction } from "../actions";
 import { InfinitePlay } from "./infinite-play";
@@ -11,16 +12,17 @@ export const metadata: Metadata = { title: "Infinite Mode" };
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-export default async function InfiniteModePage({ params }: PageProps<"/infinite/[scope]">) {
+export default async function InfiniteModePage({ params, searchParams }: PageProps<"/infinite/[scope]">) {
   const { scope } = await params;
   if (scope !== "all" && !UUID.test(scope)) notFound();
+  const unrated = (await searchParams).play === "unrated";
   const person = await readPerson();
 
   let pair: InfinitePair | null = null;
   let problem: string | null = null;
   if (person) {
     try {
-      pair = await getInfinitePair(createAdminClient(), person, scope === "all" ? null : scope);
+      pair = await getInfinitePair(createAdminClient(), person, scope === "all" ? null : scope, { unrated });
     } catch (error) {
       if (!(error instanceof GameError)) throw error;
       problem = error.message;
@@ -36,14 +38,7 @@ export default async function InfiniteModePage({ params }: PageProps<"/infinite/
           </Link>
           <h1 className="text-xl font-semibold tracking-tight md:text-2xl">{pair?.scopeName ?? "Infinite Mode"}</h1>
         </div>
-        {pair && (
-          <p className="text-sm text-zinc-600">
-            <span className="rounded-full bg-zinc-200 px-2 py-0.5 text-xs font-medium uppercase tracking-wide text-zinc-700">
-              Unrated
-            </span>{" "}
-            Skip as often as you like
-          </p>
-        )}
+        {pair && <PlayStatus play={pair.play} scope={scope} />}
       </header>
 
       {pair && <InfinitePlay pair={pair} />}
@@ -58,7 +53,8 @@ export default async function InfiniteModePage({ params }: PageProps<"/infinite/
       )}
 
       {!person && (
-        <form action={startInfiniteModeAction.bind(null, scope)} className="flex flex-col items-start gap-3">
+        <form action={startInfiniteModeAction} className="flex flex-col items-start gap-3">
+          <input type="hidden" name="scope" value={scope} />
           <p className="text-zinc-700">Pick the winner of one pair after another, for as long as you like.</p>
           <button type="submit" className="rounded-xl bg-zinc-900 px-5 py-3 font-medium text-white hover:bg-zinc-700">
             Start Infinite Mode
@@ -66,5 +62,45 @@ export default async function InfiniteModePage({ params }: PageProps<"/infinite/
         </form>
       )}
     </main>
+  );
+}
+
+function Badge({ rated }: { rated: boolean }) {
+  return (
+    <span
+      className={`rounded-full px-2 py-0.5 text-xs font-medium uppercase tracking-wide ${
+        rated ? "bg-zinc-900 text-white" : "bg-zinc-200 text-zinc-700"
+      }`}
+    >
+      {rated ? "Rated" : "Unrated"}
+    </span>
+  );
+}
+
+/** Whether picks count as rated right now, and what's left today or why they don't. */
+function PlayStatus({ play, scope }: { play: InfinitePair["play"]; scope: string }) {
+  if (play.rated) {
+    return (
+      <p className="text-sm text-zinc-600">
+        <Badge rated /> {play.ratedPicksLeft} rated {play.ratedPicksLeft === 1 ? "pick" : "picks"} left today ·{" "}
+        {play.ratedSkipsLeft} of {RATED_SKIPS_PER_DAY} rated skips left
+      </p>
+    );
+  }
+  return (
+    <p className="text-sm text-zinc-600">
+      <Badge rated={false} />{" "}
+      {play.reason === "allowance-used-up"
+        ? "Your rated allowance here is used up for today, so picks are unrated until midnight Eastern. Skip as often as you like."
+        : "Skip as often as you like."}
+      {play.reason === "chose-unrated" && (
+        <>
+          {" "}
+          <Link href={`/infinite/${scope}`} className="font-medium underline">
+            Play rated
+          </Link>
+        </>
+      )}
+    </p>
   );
 }

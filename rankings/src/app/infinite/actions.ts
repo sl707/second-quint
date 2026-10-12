@@ -6,10 +6,15 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { ensurePerson, readPerson } from "@/lib/session";
 import { GameError, pickInfiniteWinner, skipInfinitePair } from "@/server/game";
 
-/** Gives a signed-out browser its visitor ID, then opens Infinite Mode on the scope ("all" or a category ID). */
-export async function startInfiniteModeAction(scope: string) {
-  await ensurePerson();
-  redirect(`/infinite/${encodeURIComponent(scope)}`);
+/**
+ * Gives a signed-out browser its visitor ID, then opens Infinite Mode on the form's scope ("all" or
+ * a category ID), unrated if a signed-in player ticked "Play unrated".
+ */
+export async function startInfiniteModeAction(form: FormData) {
+  const person = await ensurePerson();
+  const scope = encodeURIComponent(String(form.get("scope") ?? "all"));
+  const unrated = "playerId" in person && form.get("unrated") !== null;
+  redirect(`/infinite/${scope}${unrated ? "?play=unrated" : ""}`);
 }
 
 /** What happened to the last pair, and how many picks this visit to the page. */
@@ -27,13 +32,21 @@ export async function playInfiniteAction(state: InfinitePlayState, form: FormDat
       await skipInfinitePair(createAdminClient(), person, { pairId });
       next = { message: "Skipped.", picks: state.picks };
     } else {
-      await pickInfiniteWinner(createAdminClient(), person, { pairId, winnerId: String(winnerId) });
-      next = { message: `You picked ${form.get("winnerName")} over ${form.get("loserName")}.`, picks: state.picks + 1 };
+      const { rated } = await pickInfiniteWinner(createAdminClient(), person, { pairId, winnerId: String(winnerId) });
+      const lastRated =
+        rated && form.get("lastRatedPick") !== null
+          ? " That was your last rated pick in this scope today; your picks are unrated until midnight Eastern."
+          : "";
+      next = {
+        message: `You picked ${form.get("winnerName")} over ${form.get("loserName")}.${lastRated}`,
+        picks: state.picks + 1,
+      };
     }
   } catch (error) {
-    // A repeated tap or another tab; the refresh shows the pair that's actually offered.
     if (!(error instanceof GameError)) throw error;
-    next = { message: null, picks: state.picks };
+    // A repeated tap or another tab; the refresh shows the pair that's actually offered. A skip can
+    // also be refused when the rated skips are used up.
+    next = { message: winnerId === null ? error.message : null, picks: state.picks };
   }
   refresh();
   return next;

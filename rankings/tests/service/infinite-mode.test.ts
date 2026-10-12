@@ -27,7 +27,7 @@ async function matchesBy(person: Person) {
 }
 
 describe("Infinite Mode picks", () => {
-  it("stores each pick at once as an unrated match in the category it was drawn from", async () => {
+  it("stores a signed-out visitor's pick at once as an unrated match in the category it was drawn from", async () => {
     const { categoryId, contestantIds } = await createCategory(db, 6);
     const visitor = newVisitor();
 
@@ -56,7 +56,7 @@ describe("Infinite Mode picks", () => {
     await pickInfiniteWinner(db, player, { pairId: pair.pairId, winnerId: pair.contestants[0].id });
 
     expect(await matchesBy(player)).toEqual([
-      expect.objectContaining({ winner_id: pair.contestants[0].id, category_id: null, rated: false, tournament_id: null }),
+      expect.objectContaining({ winner_id: pair.contestants[0].id, category_id: null, rated: true, tournament_id: null }),
     ]);
   });
 

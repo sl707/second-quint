@@ -1,6 +1,8 @@
 export const MIN_ALLOWANCE = 20;
 export const MAX_ALL_CONTESTANTS_ALLOWANCE = 500;
 export const ALLOWANCE_TIME_ZONE = "America/New_York";
+/** Skips one account can use per allowance day across all Infinite Mode while playing rated. */
+export const RATED_SKIPS_PER_DAY = 5;
 
 /** How many rated matches one account can record in a scope per day. */
 export function ratedAllowance({ allContestants, contestantCount }: { allContestants: boolean; contestantCount: number }): number {

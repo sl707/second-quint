@@ -7,6 +7,8 @@ import { playInfiniteAction } from "../actions";
 
 export function InfinitePlay({ pair }: { pair: InfinitePair }) {
   const [state, action, pending] = useActionState(playInfiniteAction, { message: null, picks: 0 });
+  const outOfSkips = pair.play.rated && pair.play.ratedSkipsLeft === 0;
+  const lastRatedPick = pair.play.rated && pair.play.ratedPicksLeft === 1;
 
   return (
     <section aria-label="Current pair" className="flex flex-col gap-4">
@@ -25,6 +27,7 @@ export function InfinitePlay({ pair }: { pair: InfinitePair }) {
                 <input type="hidden" name="winnerId" value={contestant.id} />
                 <input type="hidden" name="winnerName" value={contestant.name} />
                 <input type="hidden" name="loserName" value={other.name} />
+                {lastRatedPick && <input type="hidden" name="lastRatedPick" value="1" />}
                 <button
                   type="submit"
                   disabled={pending}
@@ -47,15 +50,18 @@ export function InfinitePlay({ pair }: { pair: InfinitePair }) {
         })}
       </div>
 
-      <form action={action} className="flex justify-center">
+      <form action={action} className="flex flex-col items-center gap-1">
         <input type="hidden" name="pairId" value={pair.pairId} />
         <button
           type="submit"
-          disabled={pending}
+          disabled={pending || outOfSkips}
           className="rounded-full border border-zinc-300 bg-white px-5 py-2 text-sm font-medium text-zinc-700 hover:border-zinc-500 disabled:opacity-60"
         >
           Skip
         </button>
+        {outOfSkips && (
+          <p className="text-center text-sm text-zinc-500">No rated skips left today. Pick a winner, or play unrated to skip.</p>
+        )}
       </form>
 
       <div role="status" className="flex min-h-10 flex-col items-center text-center text-sm text-zinc-600">
