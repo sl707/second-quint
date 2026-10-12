@@ -3,6 +3,9 @@ export const CATEGORY_CREATOR_EDIT_LIMIT = 10;
 
 export const MAX_CATEGORY_DESCRIPTION_LENGTH = 280;
 
+/** A report's reason is kept short. */
+export const MAX_REPORT_REASON_LENGTH = 280;
+
 type Who = { isCreator: boolean; isAdmin: boolean };
 
 /** Editing a contestant's name and picture, or deleting it: its creator until its first rated match, then only the admin. */

@@ -10,6 +10,7 @@ import { listPastTournaments, listUnfinishedTournaments, type PastTournament } f
 import { getProfile } from "@/server/profiles";
 import { getPersonalRanking, listPersonalRankingScopes } from "@/server/rankings";
 import { isRatedVersion, RankingList, VersionSwitch } from "../../rankings/ranking-view";
+import { ReportForm } from "../../report-form";
 import { UnfinishedTournaments } from "../../unfinished-tournaments";
 
 const loadProfile = cache((name: string) => getProfile(createAdminClient(), decodeURIComponent(name)));
@@ -109,6 +110,12 @@ export default async function ProfilePage({ params, searchParams }: PageProps<"/
           <p className="text-zinc-600">{player.displayName} hasn&apos;t played a tournament yet.</p>
         )}
       </section>
+
+      {viewer?.playerId !== player.id && (
+        <div className="mt-8">
+          <ReportForm targetType="profile" targetId={player.id} label={player.displayName} />
+        </div>
+      )}
     </main>
   );
 }
@@ -125,7 +132,13 @@ function PastTournamentItem({ tournament: t }: { tournament: PastTournament }) {
         </span>
       </span>
       <span className="text-sm text-zinc-700">
-        {t.ranking ? `Winner: ${t.ranking[0]?.contestants[0]?.name ?? "—"}` : t.status === "given_up" ? "Given up" : "In progress"}
+        {t.ranking
+          ? `Winner: ${t.ranking[0]?.contestants[0]?.name ?? "—"}`
+          : t.status === "given_up"
+            ? "Given up"
+            : t.status === "removed"
+              ? "Removed"
+              : "In progress"}
       </span>
     </span>
   );

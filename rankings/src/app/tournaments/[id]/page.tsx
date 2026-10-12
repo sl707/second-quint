@@ -36,7 +36,9 @@ export default async function TournamentPage({ params }: PageProps<"/tournaments
           <span aria-live="polite">
             {tournament.status === "given_up"
               ? "Given up"
-              : bracket.finished
+              : tournament.status === "removed"
+                ? "Removed"
+                : bracket.finished
                 ? "Finished"
                 : `${left} ${left === 1 ? "match" : "matches"} left`}
           </span>
@@ -89,7 +91,17 @@ export default async function TournamentPage({ params }: PageProps<"/tournaments
         </p>
       )}
 
-      {bracket.ranking && (
+      {tournament.status === "removed" && (
+        <p className="rounded-xl border border-zinc-200 bg-white p-4 text-zinc-700">
+          This tournament ended because one of its contestants or its category was deleted. Its other matches still
+          count; it has no tournament ranking.{" "}
+          <Link href="/tournaments/new" className="font-medium underline">
+            Play another tournament
+          </Link>
+        </p>
+      )}
+
+      {tournament.status !== "removed" && bracket.ranking && (
         <section aria-labelledby="ranking-heading" className="flex flex-col gap-3">
           <h2 id="ranking-heading" className="text-xl font-semibold tracking-tight">
             Tournament ranking

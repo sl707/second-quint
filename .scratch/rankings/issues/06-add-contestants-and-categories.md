@@ -28,7 +28,7 @@ Implemented in 4bcb2f0.
 - `players.is_admin` already existed (ticket 05).
 - **Deviations**:
   - Browsers that can't encode WebP from a canvas (Safari) upload JPEG instead; the bucket accepts `image/webp` and `image/jpeg`.
-  - Deleting a contestant also deletes its matches and every tournament whose bracket drew it, because those brackets can't be replayed without it. Picture files no other contestant uses are removed on delete and on picture change.
+  - ~~Deleting a contestant also deletes its matches and every tournament whose bracket drew it, because those brackets can't be replayed without it.~~ Changed in ticket 17: it deletes only its own matches; tournaments that drew it end with status `removed` (no tournament ranking, can't continue) and their other matches still count. Picture files no other contestant uses are removed on delete and on picture change.
   - The default cover is the top of the category's stored rated ranking, falling back to the unrated ranking until rated rankings exist (ticket 13), then to the first contestant by name.
   - "Added by" is hidden when a contestant or category has no creator (the sample catalog). Ticket 20 decides the "deleted player" wording.
   - The creator (or admin) can choose the cover at any time; the 10-contestant limit applies only to name and description.

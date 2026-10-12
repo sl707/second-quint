@@ -64,6 +64,14 @@ The allowance size and the New York day boundaries are pure (`src/domain/allowan
 
 The catalog service (`src/server/catalog.ts`) adds and edits contestants and categories and enforces who may edit what (rules in `src/domain/catalog/permissions.ts`). Pictures are resized in the browser by `src/lib/picture/resize.ts` to center-cropped squares at 512 and 128 px (WebP; JPEG where the browser can't encode WebP), using the pure rules in `src/domain/picture/picture.ts`, which a server-side import with `sharp` can reuse. The server stores them in the public `pictures` Storage bucket (created by a migration) under the SHA-256 of their bytes, cached for a year. `contestants.source_id` is an internal, unique ID for bulk-imported contestants (e.g. `mal:12345`), never shown.
 
+### Reports and moderation
+
+Anyone (signed in or not) can report a contestant, category, or profile with a short reason (`reportItem` in `src/server/catalog.ts`, the `ReportForm` on those pages); a second report of the same thing by the same person while the first is open adds nothing. The admin service (`src/server/admin.ts`) is admin-only (`players.is_admin`, not banned): `listOpenReports` / `closeReport` (resolved or dismissed) back `/admin` (404 for everyone else, linked from the header), and `removeContestantFromCategory` / `deleteCategory` back the admin controls on the category page. The admin edits or deletes any contestant or category through the catalog service's normal functions. In the database, only the admin can read `reports` (row-level security via `private.is_admin()`), and `remove_from_category`, `delete_category`, and `delete_contestant` are service-role only.
+
+- **Deleting a contestant** (creator before its first rated match, or the admin) deletes only its own matches. Tournaments that drew it get status `removed`: they can't continue or be undone, have no tournament ranking, and their other matches still count. Open reports about it are resolved.
+- **Removing a contestant from a category** drops it from that category's stored rankings at once (the rest move up) and clears it as cover; its matches stay and still count toward overall, and refreshes leave them out of the category ranking because the calculation ignores non-members.
+- **Deleting a category** deletes its memberships, rankings, and snapshots; its matches and tournaments keep going with no category (so they count toward overall only), and its unfinished tournaments become `removed`.
+
 ### Test seams
 
 - **Unit** (`npm test`): `src/**/*.test.ts`, pure domain code, including the ranking calculation

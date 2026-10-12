@@ -6,9 +6,10 @@ import {
   canEditCategory,
   canEditContestant,
   MAX_CATEGORY_DESCRIPTION_LENGTH,
+  MAX_REPORT_REASON_LENGTH,
 } from "@/domain/catalog/permissions";
 import { MAX_STORED_PICTURE_BYTES, storedPictureType } from "@/domain/picture/picture";
-import type { ContestantCard, SignedInPlayer } from "@/server/game";
+import type { ContestantCard, Person, SignedInPlayer } from "@/server/game";
 
 /** Who added a contestant or category; null once that player has deleted their account. */
 export type Contributor = { id: string; displayName: string } | null;
@@ -170,6 +171,8 @@ export type CategoryDetails = {
   canEdit: boolean;
   canChooseCover: boolean;
   canAddContestants: boolean;
+  /** The admin: may remove contestants and delete the category */
+  canModerate: boolean;
 };
 
 type CardRow = { id: string; name: string; picture_512_url: string; picture_128_url: string };
@@ -261,6 +264,7 @@ function categoryRights(by: Actor | null, category: CategoryRow, contestantCount
     canEdit: !!by && canEditCategory({ ...who, contestantCount }),
     canChooseCover: !!by && canChooseCover(who),
     canAddContestants: !!by,
+    canModerate: by?.isAdmin ?? false,
   };
 }
 
@@ -490,13 +494,44 @@ export async function editContestant(
 }
 
 /**
- * Deletes a contestant: its creator until its first rated match, then only the admin. Its matches
- * and every tournament that drew it go too.
+ * Deletes a contestant: its creator until its first rated match, then only the admin. Its own
+ * matches go too; tournaments that drew it end as removed, and their other matches still count.
  */
 export async function deleteContestant(db: SupabaseClient, player: SignedInPlayer, contestantId: string): Promise<void> {
   await editableContestant(db, player, contestantId);
   const unused = check(await db.rpc("delete_contestant", { p_contestant_id: contestantId })) as string[];
   await removeUnusedPictures(db, unused);
+}
+
+export type ReportTargetType = "contestant" | "category" | "profile";
+
+/** What a report is about: a contestant, a category, or a player's profile, by ID. */
+export type ReportTarget = { type: ReportTargetType; id: string };
+
+const REPORT_TABLES: Record<ReportTargetType, string> = { contestant: "contestants", category: "categories", profile: "players" };
+
+/** Flags a contestant, category, or profile for the admin, with a short reason. Anyone may, once while it's open. */
+export async function reportItem(db: SupabaseClient, person: Person, target: ReportTarget, reasonInput: string): Promise<void> {
+  const reason = reasonInput.trim();
+  if (!reason) throw new CatalogError("Say briefly what's wrong.");
+  if (reason.length > MAX_REPORT_REASON_LENGTH) {
+    throw new CatalogError(`Reasons can be up to ${MAX_REPORT_REASON_LENGTH} characters.`);
+  }
+  const table = REPORT_TABLES[target.type];
+  const exists =
+    !!table &&
+    UUID.test(target.id) &&
+    !!check(await db.from(table).select("id").eq("id", target.id).maybeSingle());
+  if (!exists) throw new CatalogError("That doesn't exist any more.");
+
+  const { error } = await db.from("reports").insert({
+    reporter_player_id: "playerId" in person ? person.playerId : null,
+    reporter_visitor_id: "visitorId" in person ? person.visitorId : null,
+    target_type: target.type,
+    target_id: target.id,
+    reason,
+  });
+  if (error && error.code !== "23505") throw error;
 }
 
 export type CategorySummary = {

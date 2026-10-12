@@ -7,6 +7,8 @@ import { readSignedInPlayer } from "@/lib/session";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getCategory } from "@/server/catalog";
 import { AddedBy } from "../../added-by";
+import { deleteCategoryAction, removeFromCategoryAction } from "../../admin/actions";
+import { ReportForm } from "../../report-form";
 import { setCoverAction } from "../actions";
 import { CategoryForm } from "../category-form";
 import { AddContestants } from "./add-contestants";
@@ -80,6 +82,17 @@ export default async function CategoryPage({ params }: PageProps<"/categories/[i
                   </form>
                 )
               )}
+              {category.canModerate && (
+                <form action={removeFromCategoryAction.bind(null, category.id, c.id)}>
+                  <button
+                    type="submit"
+                    aria-label={`Remove ${c.name} from this category`}
+                    className="rounded-lg px-2 py-1 text-sm text-red-700 hover:bg-red-50"
+                  >
+                    Remove
+                  </button>
+                </form>
+              )}
             </li>
           ))}
         </ul>
@@ -114,6 +127,23 @@ export default async function CategoryPage({ params }: PageProps<"/categories/[i
           </div>
         </details>
       )}
+
+      {category.canModerate && (
+        <details className="rounded-xl border border-red-200 bg-white px-4 py-3">
+          <summary className="cursor-pointer font-medium text-red-800">Delete category</summary>
+          <form action={deleteCategoryAction.bind(null, category.id)} className="flex flex-col gap-3 pt-3">
+            <p className="text-sm text-zinc-600">
+              This deletes the category and its rankings, and ends its unfinished tournaments. Its contestants stay, and
+              its matches still count toward the overall ranking.
+            </p>
+            <button type="submit" className="self-start rounded-xl bg-red-700 px-4 py-2 font-medium text-white">
+              Delete {category.name}
+            </button>
+          </form>
+        </details>
+      )}
+
+      <ReportForm targetType="category" targetId={category.id} label={category.name} />
     </main>
   );
 }

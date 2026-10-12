@@ -58,6 +58,9 @@ A tournament with randomly drawn contestants whose matches all fit within the pl
 Ending an unfinished rated tournament early. Its played matches stay counted, it never gets a tournament ranking, and its reserved allowance stays spent.
 _Avoid_: Forfeit, abandon, quit
 
+**Removed Tournament**:
+A tournament ended because one of its contestants or its category was deleted. It can't continue and has no tournament ranking; its remaining matches still count.
+
 **Unrated Tournament**:
 A tournament that produces a tournament ranking but doesn't affect global rankings, because its contestants were hand-picked, the player chose to play unrated, its matches didn't all fit in the player's remaining rated allowance when it started, or the player isn't signed in.
 

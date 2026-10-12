@@ -16,8 +16,8 @@ import {
   listCategories,
   setCategoryCover,
 } from "@/server/catalog";
-import { getTournament, startTournament } from "@/server/game";
-import { refreshGlobalRankings } from "@/server/rankings";
+import { GameError, getTournament, pickWinner, startTournament, undoLastPick } from "@/server/game";
+import { getGlobalRanking, refreshGlobalRankings } from "@/server/rankings";
 import { makeAdmin, newPlayer, newVisitor, recordMatch, removeTestData, testPicture } from "./fixtures";
 
 const db = createAdminClient();
@@ -187,20 +187,37 @@ describe("editing and deleting contestants", () => {
     expect((await getContestant(db, contestant.id))?.name).toBe(contestant.name);
   });
 
-  it("lets the creator delete it before its first rated match, along with its unrated play", async () => {
+  it("lets the creator delete it before its first rated match, along with only its own matches", async () => {
     const creator = await newPlayer(db);
     const { categoryId } = await createCategory(db, creator, { name: categoryName(), description: "" });
     const contestants = await addContestants(creator, 4);
+    const [doomed, ...others] = contestants;
     for (const c of contestants) await addContestantToCategory(db, creator, categoryId, c.id);
     const visitor = newVisitor();
     const { tournamentId } = await startTournament(db, visitor, { categoryId, size: 4 });
-    await recordMatch(db, { winnerId: contestants[0].id, loserId: contestants[1].id, categoryId });
+    // Both first-round matches: one of them is the doomed contestant's.
+    for (let i = 0; i < 2; i++) {
+      const next = (await getTournament(db, visitor, tournamentId))!.bracket.next!;
+      await pickWinner(db, visitor, tournamentId, next.contestantIds[0]);
+    }
+    await recordMatch(db, { winnerId: doomed.id, loserId: others[0].id, categoryId });
+    await recordMatch(db, { winnerId: others[1].id, loserId: others[2].id, categoryId });
 
-    await deleteContestant(db, creator, contestants[0].id);
+    await deleteContestant(db, creator, doomed.id);
 
-    expect(await getContestant(db, contestants[0].id)).toBeNull();
+    expect(await getContestant(db, doomed.id)).toBeNull();
     expect((await getCategory(db, categoryId))?.contestants).toHaveLength(3);
-    expect(await getTournament(db, visitor, tournamentId)).toBeNull();
+    const ended = await getTournament(db, visitor, tournamentId);
+    expect(ended).toMatchObject({ status: "removed", canUndo: false });
+    expect(ended?.bracket.ranking).toBeNull();
+    await expect(undoLastPick(db, visitor, tournamentId)).rejects.toThrow(GameError);
+    await expect(pickWinner(db, visitor, tournamentId, others[0].id)).rejects.toThrow(GameError);
+
+    await refreshGlobalRankings(db);
+    const ranking = (await getGlobalRanking(db, categoryId, { rated: false }))!;
+    // The other first-round match and the match between two others stay.
+    expect(ranking.ranked.reduce((sum, r) => sum + r.matches, 0) / 2).toBe(2);
+    expect(ranking.ranked.map((r) => r.contestant.id)).not.toContain(doomed.id);
   });
 
   it("lets the admin edit or delete any contestant, even after rated matches", async () => {

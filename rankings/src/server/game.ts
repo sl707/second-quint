@@ -40,7 +40,8 @@ export type ScopeOption = {
 
 export type ContestantCard = { id: string; name: string; picture512Url: string; picture128Url: string };
 
-export type TournamentStatus = "in_progress" | "finished" | "given_up";
+/** `removed`: ended because one of its contestants or its category was deleted. */
+export type TournamentStatus = "in_progress" | "finished" | "given_up" | "removed";
 
 export type Tournament = {
   id: string;
@@ -72,7 +73,7 @@ export type PastTournament = {
   rated: boolean;
   status: TournamentStatus;
   createdAt: string;
-  /** The tournament ranking once finished; null while in progress or after giving up. */
+  /** The tournament ranking once finished; null while in progress, after giving up, or once removed. */
   ranking: { place: string; contestants: ContestantCard[] }[] | null;
 };
 
@@ -307,13 +308,16 @@ async function loadOwnTournament(db: SupabaseClient, person: Person, tournamentI
       .maybeSingle(),
   ) as TournamentRow | null;
   if (!row) return null;
-  const picks = check(
+  const matches = check(
     await db
       .from("matches")
-      .select("winnerId:winner_id, loserId:loser_id")
+      .select("winnerId:winner_id, loserId:loser_id, bracketMatch:bracket_match")
       .eq("tournament_id", tournamentId)
       .order("bracket_match"),
-  ) as { winnerId: string; loserId: string }[];
+  ) as { winnerId: string; loserId: string; bracketMatch: number }[];
+  // A removed tournament lost a deleted contestant's matches; replay up to the first gap.
+  const gap = matches.findIndex((m, i) => m.bracketMatch !== i);
+  const picks = (gap === -1 ? matches : matches.slice(0, gap)).map(({ winnerId, loserId }) => ({ winnerId, loserId }));
   return { row, bracket: playBracket(row.bracket.slots, picks) };
 }
 
@@ -417,7 +421,8 @@ export async function giveUpTournament(db: SupabaseClient, person: Person, tourn
 /** Takes back the person's most recent pick, once, as long as they haven't picked the next match. */
 export async function undoLastPick(db: SupabaseClient, person: Person, tournamentId: string): Promise<void> {
   const { row, bracket } = await requireOwnTournament(db, person, tournamentId);
-  if (!row.can_undo || bracket.matchesPlayed === 0 || row.status === "given_up") {
+  const undoable: TournamentStatus[] = ["in_progress", "finished"];
+  if (!row.can_undo || bracket.matchesPlayed === 0 || !undoable.includes(row.status)) {
     throw new GameError("There's no pick to undo.");
   }
 
@@ -427,7 +432,7 @@ export async function undoLastPick(db: SupabaseClient, person: Person, tournamen
       .update({ can_undo: false, status: "in_progress", finished_at: null })
       .eq("id", row.id)
       .eq("can_undo", true)
-      .neq("status", "given_up")
+      .in("status", undoable)
       .select("id"),
   );
   if (claimed.length === 0) throw new GameError("There's no pick to undo.");

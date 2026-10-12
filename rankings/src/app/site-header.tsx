@@ -3,6 +3,8 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { PATHNAME_HEADER } from "@/lib/pathname";
 import { getSession } from "@/lib/session";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { isAdmin } from "@/server/admin";
 import { signInWithGoogleAction, signOutAction } from "./auth/actions";
 
 const buttonClass = "rounded-lg px-3 py-1.5 text-sm font-medium hover:bg-zinc-100";
@@ -15,10 +17,17 @@ export async function SiteHeader() {
     redirect(`/welcome?next=${encodeURIComponent(pathname)}`);
   }
 
+  const admin = session.status === "player" && (await isAdmin(createAdminClient(), { playerId: session.player.id }));
+
   return (
     <nav aria-label="Account" className="flex items-center justify-end gap-1 border-b border-zinc-200 bg-white px-4 py-2">
       {session.status === "player" ? (
         <>
+          {admin && (
+            <Link href="/admin" className={buttonClass}>
+              Admin
+            </Link>
+          )}
           <Link
             href={`/players/${encodeURIComponent(session.player.displayName)}`}
             className={buttonClass}

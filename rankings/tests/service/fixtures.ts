@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
-import type { SupabaseClient } from "@supabase/supabase-js";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import sharp from "sharp";
+import { publicEnv } from "@/lib/env";
 
 /** Creates a category with `count` fresh contestants, so each test owns its scope. */
 export async function createCategory(db: SupabaseClient, count: number) {
@@ -87,11 +88,23 @@ export function uniqueDisplayName(prefix = "test") {
 
 /** A signed-in player who has chosen a display name. */
 export async function newPlayer(db: SupabaseClient) {
-  const { userId } = await newUser(db);
+  const { userId, email } = await newUser(db);
   const displayName = uniqueDisplayName();
   const { data, error } = await db.from("players").insert({ user_id: userId, display_name: displayName }).select("id").single();
   if (error) throw error;
-  return { playerId: data.id as string, displayName };
+  return { playerId: data.id as string, displayName, email };
+}
+
+/** A browser-side client signed in as the user with `email`, as after Google sign-in. */
+export async function signedInClient(db: SupabaseClient, email: string) {
+  const { data, error } = await db.auth.admin.generateLink({ type: "magiclink", email });
+  if (error) throw error;
+  const client = createClient(publicEnv.supabaseUrl, publicEnv.supabasePublishableKey, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
+  const verified = await client.auth.verifyOtp({ type: "magiclink", token_hash: data.properties.hashed_token });
+  if (verified.error) throw verified.error;
+  return client;
 }
 
 /** Makes a player the admin. */
@@ -114,6 +127,7 @@ export async function testPicture(color: string) {
 /** Removes everything the fixtures created, so the all-contestants scope doesn't keep growing. */
 export async function removeTestData(db: SupabaseClient) {
   if (visitors.length) {
+    await db.from("reports").delete().in("reporter_visitor_id", visitors);
     await db.from("matches").delete().in("visitor_id", visitors);
     await db.from("tournaments").delete().in("visitor_id", visitors);
     await db.from("infinite_pairs").delete().in("visitor_id", visitors);
@@ -121,6 +135,8 @@ export async function removeTestData(db: SupabaseClient) {
   const { data: players } = users.length ? await db.from("players").select("id").in("user_id", users) : { data: [] };
   const playerIds = (players ?? []).map((p) => p.id as string);
   if (playerIds.length) {
+    await db.from("reports").delete().in("reporter_player_id", playerIds);
+    await db.from("reports").delete().eq("target_type", "profile").in("target_id", playerIds);
     await db.from("matches").delete().in("player_id", playerIds);
     await db.from("tournaments").delete().in("player_id", playerIds);
   }

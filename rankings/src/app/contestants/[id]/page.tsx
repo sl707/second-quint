@@ -9,6 +9,7 @@ import { createVisitorClient } from "@/lib/supabase/server";
 import { getContestant } from "@/server/catalog";
 import { getContestantStanding, type ContestantScopeStanding } from "@/server/rankings";
 import { AddedBy } from "../../added-by";
+import { ReportForm } from "../../report-form";
 import { isRatedVersion, VersionSwitch } from "../../rankings/ranking-view";
 import { deleteContestantAction } from "../actions";
 import { ContestantForm } from "../contestant-form";
@@ -116,7 +117,8 @@ export default async function ContestantPage({ params, searchParams }: PageProps
             <summary className="cursor-pointer font-medium text-red-800">Delete contestant</summary>
             <form action={deleteContestantAction.bind(null, contestant.id)} className="flex flex-col gap-3 pt-3">
               <p className="text-sm text-zinc-600">
-                This removes it from every category, along with every match and tournament it was in.
+                This removes it from every category, along with its matches. Tournaments it was drawn in end early; their
+                other matches still count.
               </p>
               <button type="submit" className="self-start rounded-xl bg-red-700 px-4 py-2 font-medium text-white">
                 Delete {contestant.name}
@@ -125,6 +127,8 @@ export default async function ContestantPage({ params, searchParams }: PageProps
           </details>
         </>
       )}
+
+      <ReportForm targetType="contestant" targetId={contestant.id} label={contestant.name} />
     </main>
   );
 }
