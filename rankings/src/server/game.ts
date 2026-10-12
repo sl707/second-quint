@@ -116,6 +116,13 @@ async function requireNotBanned(db: SupabaseClient, person: Person): Promise<voi
   if (await isBanned(db, person)) throw new GameError(BANNED);
 }
 
+/** Calls a play SQL function, which refuses a banned player while holding their row. */
+async function callPlay<T>(db: SupabaseClient, fn: string, args: Record<string, unknown>): Promise<T> {
+  const { data, error } = await db.rpc(fn, args);
+  if (error?.message === "player_banned") throw new GameError(BANNED);
+  return check<T>({ data, error });
+}
+
 async function scopeContestantIds(db: SupabaseClient, categoryId: ScopeId): Promise<string[]> {
   const ids: string[] = [];
   for (let from = 0; ; from += PAGE) {
@@ -219,7 +226,6 @@ export async function startTournament(
   options: StartTournamentOptions,
   random: Random = Math.random,
 ): Promise<StartedTournament> {
-  await requireNotBanned(db, person);
   await scopeName(db, options.categoryId);
   const scope = await scopeContestantIds(db, options.categoryId);
   const sizes = tournamentSizeOptions(scope.length);
@@ -240,8 +246,10 @@ export async function startTournament(
   const choseUnrated = signedIn && play === "unrated";
   const now = options.now ?? new Date();
   const allowance = ratedAllowance({ allContestants: options.categoryId === null, contestantCount: scope.length });
-  const [started] = check<{ tournament_id: string | null; rated: boolean; unrated_reason: UnratedReason | null }[]>(
-    await db.rpc("start_tournament", {
+  const [started] = await callPlay<{ tournament_id: string | null; rated: boolean; unrated_reason: UnratedReason | null }[]>(
+    db,
+    "start_tournament",
+    {
       ...personParams(person),
       p_category_id: options.categoryId,
       p_size: matchCountFor(size),
@@ -251,7 +259,7 @@ export async function startTournament(
       p_day: allowanceDay(now),
       p_allowance: allowance,
       p_hand_picked: handPicked,
-    }),
+    },
   );
   const unratedReason: UnratedReason | null = started.rated
     ? null
@@ -394,6 +402,9 @@ async function requireOwnTournament(db: SupabaseClient, person: Person, tourname
  */
 export type SignedOutPickContext = { ip?: string | null; now?: Date };
 
+const NO_MATCH_LEFT = "This tournament has no match left to pick.";
+const ALREADY_PICKED = "That match was already picked.";
+
 /**
  * Records the person's pick for the tournament's next match. Passing the `matchIndex` they
  * were shown guards against a repeated tap landing on the following match.
@@ -405,41 +416,24 @@ export async function pickWinner(
   winnerId: string,
   options: { matchIndex?: number } & SignedOutPickContext = {},
 ): Promise<void> {
-  await requireNotBanned(db, person);
   const { row, bracket } = await requireOwnTournament(db, person, tournamentId);
   const next = bracket.next;
-  if (row.status !== "in_progress" || !next) throw new GameError("This tournament has no match left to pick.");
-  if (options.matchIndex !== undefined && options.matchIndex !== next.index) {
-    throw new GameError("That match was already picked.");
-  }
+  if (row.status !== "in_progress" || !next) throw new GameError(NO_MATCH_LEFT);
+  if (options.matchIndex !== undefined && options.matchIndex !== next.index) throw new GameError(ALREADY_PICKED);
   if (!next.contestantIds.includes(winnerId)) throw new GameError("That contestant isn't in the current match.");
   if (!isSignedIn(person)) await claimSignedOutPick(db, person, options);
 
-  const { error } = await db.from("matches").insert({
-    winner_id: winnerId,
-    loser_id: next.contestantIds[0] === winnerId ? next.contestantIds[1] : next.contestantIds[0],
-    category_id: row.category_id,
-    ...ownerColumns(person),
-    rated: row.rated,
-    tournament_id: row.id,
-    round: next.round,
-    bracket_match: next.index,
+  const outcome = await callPlay<"picked" | "gone" | "taken">(db, "pick_tournament_match", {
+    p_tournament_id: row.id,
+    ...personParams(person),
+    p_bracket_match: next.index,
+    p_round: next.round,
+    p_winner_id: winnerId,
+    p_loser_id: next.contestantIds[0] === winnerId ? next.contestantIds[1] : next.contestantIds[0],
+    p_finishes: bracket.matchesLeft === 1,
   });
-  if (error?.code === "23505") throw new GameError("That match was already picked.");
-  if (error) throw error;
-
-  const finished = bracket.matchesLeft === 1;
-  check(
-    await db
-      .from("tournaments")
-      .update({
-        can_undo: true,
-        status: finished ? "finished" : "in_progress",
-        finished_at: finished ? new Date().toISOString() : null,
-      })
-      .eq("id", row.id)
-      .eq("status", "in_progress"),
-  );
+  if (outcome === "gone") throw new GameError(NO_MATCH_LEFT);
+  if (outcome === "taken") throw new GameError(ALREADY_PICKED);
 }
 
 /**
@@ -690,22 +684,19 @@ export async function pickInfiniteWinner(
   { pairId, winnerId }: { pairId: string; winnerId: string },
   { now = new Date(), ip = null }: SignedOutPickContext = {},
 ): Promise<InfinitePick> {
-  await requireNotBanned(db, person);
   const row = await requireOfferedPair(db, person, pairId);
   if (winnerId !== row.first_contestant_id && winnerId !== row.second_contestant_id) {
     throw new GameError("That contestant isn't in the current pair.");
   }
   const signedIn = isSignedIn(person);
   if (!signedIn) await claimSignedOutPick(db, person, { now, ip });
-  const [picked] = check<{ claimed: boolean; rated: boolean }[]>(
-    await db.rpc("pick_infinite_pair", {
-      p_pair_id: row.id,
-      ...personParams(person),
-      p_winner_id: winnerId,
-      p_day: allowanceDay(now),
-      p_allowance: signedIn ? await scopeAllowance(db, row.category_id) : 0,
-    }),
-  );
+  const [picked] = await callPlay<{ claimed: boolean; rated: boolean }[]>(db, "pick_infinite_pair", {
+    p_pair_id: row.id,
+    ...personParams(person),
+    p_winner_id: winnerId,
+    p_day: allowanceDay(now),
+    p_allowance: signedIn ? await scopeAllowance(db, row.category_id) : 0,
+  });
   if (!picked.claimed) throw new GameError(PAIR_GONE);
   return { rated: picked.rated };
 }
@@ -717,18 +708,15 @@ export async function skipInfinitePair(
   { pairId }: { pairId: string },
   { now = new Date() }: { now?: Date } = {},
 ): Promise<void> {
-  await requireNotBanned(db, person);
   const row = await requireOfferedPair(db, person, pairId);
   const signedIn = isSignedIn(person);
-  const [skipped] = check<{ outcome: "skipped" | "gone" | "out-of-skips" }[]>(
-    await db.rpc("skip_infinite_pair", {
-      p_pair_id: row.id,
-      ...personParams(person),
-      p_day: allowanceDay(now),
-      p_allowance: signedIn ? await scopeAllowance(db, row.category_id) : 0,
-      p_skip_limit: RATED_SKIPS_PER_DAY,
-    }),
-  );
+  const [skipped] = await callPlay<{ outcome: "skipped" | "gone" | "out-of-skips" }[]>(db, "skip_infinite_pair", {
+    p_pair_id: row.id,
+    ...personParams(person),
+    p_day: allowanceDay(now),
+    p_allowance: signedIn ? await scopeAllowance(db, row.category_id) : 0,
+    p_skip_limit: RATED_SKIPS_PER_DAY,
+  });
   if (skipped.outcome === "gone") throw new GameError(PAIR_GONE);
   if (skipped.outcome === "out-of-skips") throw new GameError(OUT_OF_SKIPS);
 }

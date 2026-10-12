@@ -4,6 +4,7 @@ import { AdminError, banPlayer, renamePlayer, unbanPlayer } from "@/server/admin
 import { addContestantToCategory, CatalogError, reportItem } from "@/server/catalog";
 import {
   GameError,
+  getAllowanceStatus,
   getInfinitePair,
   getTournament,
   pickInfiniteWinner,
@@ -24,6 +25,10 @@ import {
 import { createCategory, makeAdmin, newPlayer, recordMatch, removeTestData, uniqueDisplayName } from "./fixtures";
 
 const db = createAdminClient();
+
+function check({ error }: { error: unknown }) {
+  if (error) throw error;
+}
 
 const matchCount = (ranking: GlobalRanking | PersonalRanking, contestantId: string) =>
   ranking.ranked.find((r) => r.contestant.id === contestantId)?.matches ?? 0;
@@ -89,6 +94,47 @@ describe("a banned player", () => {
     await expect(addContestantToCategory(db, player, categoryId, contestantIds[5])).rejects.toThrow(CatalogError);
     await expect(reportItem(db, player, { type: "category", id: categoryId }, "Spam")).rejects.toThrow(CatalogError);
     expect((await getTournament(db, player, tournamentId))!.bracket.matchesPlayed).toBe(1);
+  });
+
+  it("has their unfinished tournaments ended as given up, keeping played matches and refunding nothing", async () => {
+    const { categoryId } = await createCategory(db, 8);
+    const player = await newPlayer(db);
+    const admin = await newAdmin();
+    const rated = await startTournament(db, player, { categoryId, size: 8 });
+    const unrated = await startTournament(db, player, { categoryId, size: 4, play: "unrated" });
+    const first = (await getTournament(db, player, rated.tournamentId))!.bracket.next!;
+    await pickWinner(db, player, rated.tournamentId, first.contestantIds[0]);
+
+    await banPlayer(db, admin, player.playerId, { removeMatches: false });
+
+    for (const { tournamentId } of [rated, unrated]) {
+      expect((await getTournament(db, player, tournamentId))!.status).toBe("given_up");
+    }
+    expect((await getTournament(db, player, rated.tournamentId))!.bracket.matchesPlayed).toBe(1);
+    await unbanPlayer(db, admin, player.playerId);
+    expect((await getAllowanceStatus(db, player)).scopes.find((s) => s.categoryId === categoryId)!.used).toBe(8);
+  });
+
+  it("can't have a play land once the ban does, even if it was already under way", async () => {
+    const { categoryId } = await createCategory(db, 6);
+    const player = await newPlayer(db);
+    const { tournamentId } = await startTournament(db, player, { categoryId, size: 4, play: "unrated" });
+    const next = (await getTournament(db, player, tournamentId))!.bracket.next!;
+    const pair = await getInfinitePair(db, player, categoryId);
+    // The ban lands after each play read the player as not banned, before it writes.
+    check(await db.from("players").update({ banned: true }).eq("id", player.playerId));
+
+    const banned = /banned/;
+    await expect(startTournament(db, player, { categoryId, size: 4 })).rejects.toThrow(banned);
+    await expect(pickWinner(db, player, tournamentId, next.contestantIds[0])).rejects.toThrow(banned);
+    const winnerId = pair.contestants[0].id;
+    await expect(pickInfiniteWinner(db, player, { pairId: pair.pairId, winnerId })).rejects.toThrow(banned);
+    await expect(skipInfinitePair(db, player, { pairId: pair.pairId })).rejects.toThrow(banned);
+
+    const { count } = await db.from("matches").select("id", { count: "exact", head: true }).eq("player_id", player.playerId);
+    expect(count).toBe(0);
+    const tournaments = await db.from("tournaments").select("id", { count: "exact", head: true }).eq("player_id", player.playerId);
+    expect(tournaments.count).toBe(1);
   });
 
   it("keeps their matches in the rankings unless the admin removes them", async () => {
