@@ -1,4 +1,8 @@
 import type { CompletionCounts, TournamentCompletion } from "@/server/admin";
+import { Button } from "../ui/button";
+import { Field, inputClass } from "../ui/field";
+import { SectionTitle } from "../ui/frame";
+import { Notice } from "../ui/plate";
 
 const STATUSES: { key: keyof Omit<CompletionCounts, "total">; label: string }[] = [
   { key: "finished", label: "Finished" },
@@ -7,8 +11,8 @@ const STATUSES: { key: keyof Omit<CompletionCounts, "total">; label: string }[] 
   { key: "removed", label: "Removed" },
 ];
 
-const cell = "px-2 py-1.5 text-right tabular-nums";
-const headerCell = "px-2 py-1.5 text-right font-medium text-zinc-500";
+const cell = "px-3 py-2 text-right tabular-nums";
+const headerCell = "px-3 py-2 text-right text-[13px] font-semibold uppercase tracking-wider text-orange-bright";
 
 function share(count: number, total: number) {
   return total ? `${Math.round((count / total) * 100)}%` : "—";
@@ -19,12 +23,10 @@ export function TournamentCompletionView({
   completion,
   from,
   to,
-  headingClass,
 }: {
   completion: TournamentCompletion;
   from: string;
   to: string;
-  headingClass: string;
 }) {
   const groups = [
     { label: "All", counts: completion.overall },
@@ -34,28 +36,24 @@ export function TournamentCompletionView({
 
   return (
     <section aria-labelledby="completion-heading" className="flex flex-col gap-3">
-      <h2 id="completion-heading" className={headingClass}>
-        Tournament completion
-      </h2>
-      <form action="/admin" className="flex flex-wrap items-end gap-2">
-        <label className="flex flex-col gap-1 text-sm text-zinc-600">
-          <span>Started from</span>
-          <input type="date" name="from" defaultValue={from} className="rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-zinc-900" />
-        </label>
-        <label className="flex flex-col gap-1 text-sm text-zinc-600">
-          <span>Started to</span>
-          <input type="date" name="to" defaultValue={to} className="rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-zinc-900" />
-        </label>
-        <button type="submit" className="rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-sm font-medium text-zinc-800">
+      <SectionTitle id="completion-heading">Tournament completion</SectionTitle>
+      <form action="/admin" className="flex flex-wrap items-end gap-3">
+        <Field label="Started from">
+          <input type="date" name="from" defaultValue={from} className={`${inputClass} py-2`} />
+        </Field>
+        <Field label="Started to">
+          <input type="date" name="to" defaultValue={to} className={`${inputClass} py-2`} />
+        </Field>
+        <Button variant="secondary" size="sm" className="mb-1">
           Show
-        </button>
+        </Button>
       </form>
 
-      <div className="overflow-x-auto rounded-xl border border-zinc-200 bg-white">
+      <div className="overflow-x-auto border-2 border-edge bg-plate">
         <table aria-label="Tournament outcomes" className="w-full text-sm">
           <thead>
             <tr>
-              <th className="px-2 py-1.5 text-left font-medium text-zinc-500">Tournaments</th>
+              <th className="px-3 py-2 text-left text-[13px] font-semibold tracking-wider text-orange-bright uppercase">Tournaments</th>
               {STATUSES.map((s) => (
                 <th key={s.key} className={headerCell}>
                   {s.label}
@@ -65,8 +63,8 @@ export function TournamentCompletionView({
           </thead>
           <tbody>
             {groups.map(({ label, counts }) => (
-              <tr key={label} className="border-t border-zinc-100">
-                <th scope="row" className="px-2 py-1.5 text-left font-medium">
+              <tr key={label} className="border-t border-edge">
+                <th scope="row" className="px-3 py-2 text-left font-semibold">
                   {label} ({counts.total})
                 </th>
                 {STATUSES.map((s) => (
@@ -80,21 +78,21 @@ export function TournamentCompletionView({
         </table>
       </div>
 
-      <h3 className="text-sm font-medium text-zinc-700">Where unfinished tournaments stopped</h3>
+      <SectionTitle as="h3">Where unfinished tournaments stopped</SectionTitle>
       {completion.stoppedAt.length > 0 ? (
-        <div className="overflow-x-auto rounded-xl border border-zinc-200 bg-white">
+        <div className="overflow-x-auto border-2 border-edge bg-plate">
           <table aria-label="Where unfinished tournaments stopped" className="w-full text-sm">
             <thead>
               <tr>
-                <th className="px-2 py-1.5 text-left font-medium text-zinc-500">Next match</th>
+                <th className="px-3 py-2 text-left text-[13px] font-semibold tracking-wider text-orange-bright uppercase">Next match</th>
                 <th className={headerCell}>In progress</th>
                 <th className={headerCell}>Given up</th>
               </tr>
             </thead>
             <tbody>
               {completion.stoppedAt.map((s) => (
-                <tr key={s.stage} className="border-t border-zinc-100">
-                  <th scope="row" className="px-2 py-1.5 text-left font-medium">
+                <tr key={s.stage} className="border-t border-edge">
+                  <th scope="row" className="px-3 py-2 text-left font-semibold">
                     {s.stage}
                   </th>
                   <td className={cell}>{s.inProgress}</td>
@@ -105,7 +103,7 @@ export function TournamentCompletionView({
           </table>
         </div>
       ) : (
-        <p className="text-zinc-600">No unfinished or given-up tournaments.</p>
+        <Notice>No unfinished or given-up tournaments.</Notice>
       )}
     </section>
   );

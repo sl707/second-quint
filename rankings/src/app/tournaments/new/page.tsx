@@ -1,9 +1,9 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { readPerson } from "@/lib/session";
 import { getAllowanceStatus, isSignedIn, listScopeContestants, listTournamentScopes, listUnfinishedTournaments } from "@/server/game";
 import { UnfinishedTournaments } from "../../unfinished-tournaments";
+import { Page, PageHeader } from "../../ui/frame";
 import { NewTournamentForm, type AllowanceView, type PickingView } from "./new-tournament-form";
 
 export const metadata: Metadata = { title: "New tournament" };
@@ -32,17 +32,14 @@ export default async function NewTournamentPage({ searchParams }: PageProps<"/to
   };
 
   return (
-    <main className="mx-auto flex w-full max-w-xl flex-1 flex-col gap-8 px-5 py-8">
-      <header className="flex flex-col gap-1">
-        <Link href="/" className="text-sm text-zinc-500 hover:text-zinc-800">
-          ← Second Quint Rankings
-        </Link>
-        <h1 className="text-2xl font-semibold tracking-tight">New tournament</h1>
-      </header>
+    <Page>
+      <PageHeader back={{ href: "/", label: "Second Quint Rankings" }} title="New tournament" neon>
+        <p>Pick a scope and a size; every match is one pick between two contestants.</p>
+      </PageHeader>
 
       <UnfinishedTournaments tournaments={unfinished} />
 
       <NewTournamentForm scopes={scopes} allowance={allowance} picking={picking} />
-    </main>
+    </Page>
   );
 }

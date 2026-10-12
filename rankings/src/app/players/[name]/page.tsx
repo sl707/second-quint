@@ -1,6 +1,4 @@
 import type { Metadata } from "next";
-import Image from "next/image";
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import { cache } from "react";
 import { readSignedInPlayer } from "@/lib/session";
@@ -13,6 +11,10 @@ import { getPersonalRanking, listPersonalRankingScopes } from "@/server/rankings
 import { isRatedVersion, RankingList, VersionSwitch } from "../../rankings/ranking-view";
 import { ReportForm } from "../../report-form";
 import { UnfinishedTournaments } from "../../unfinished-tournaments";
+import { ChipNav } from "../../ui/chip";
+import { ContestantThumb } from "../../ui/contestant-image";
+import { eyebrowClass, Page, SectionTitle } from "../../ui/frame";
+import { Notice, plateClass } from "../../ui/plate";
 import { DeleteAccount } from "./delete-account";
 import { PlayerModeration } from "./player-moderation";
 
@@ -68,40 +70,32 @@ export default async function ProfilePage({ params, searchParams }: PageProps<"/
   });
 
   return (
-    <main className="mx-auto flex w-full max-w-xl flex-1 flex-col gap-2 px-5 py-8">
-      <p className="text-sm font-medium uppercase tracking-wide text-zinc-500">Player</p>
-      <h1 className="text-3xl font-semibold tracking-tight">{player.displayName}</h1>
-      <p className="text-zinc-600">Joined {joined}</p>
-      {unfinished.length > 0 && (
-        <div className="mt-6">
-          <UnfinishedTournaments tournaments={unfinished} />
-        </div>
-      )}
+    <Page>
+      <header className="flex flex-col gap-2 border-l-4 border-pink bg-plate px-4 py-4 shadow-[6px_6px_0_var(--color-orange)]">
+        <p className={eyebrowClass}>Player</p>
+        <h1 className="font-display text-4xl leading-none uppercase italic [overflow-wrap:anywhere] md:text-5xl">
+          <span className="animate-neon">{player.displayName}</span>
+        </h1>
+        <p className="text-sm text-muted">Joined {joined}</p>
+      </header>
+      <UnfinishedTournaments tournaments={unfinished} />
 
-      <section aria-labelledby="personal-rankings-heading" className="mt-8 flex flex-col gap-4">
+      <section aria-labelledby="personal-rankings-heading" className="flex flex-col gap-4">
         <header className="flex flex-col gap-1">
-          <h2 id="personal-rankings-heading" className="text-xl font-semibold tracking-tight">
-            Personal rankings
-          </h2>
-          <p className="text-sm text-zinc-600">
+          <SectionTitle id="personal-rankings-heading">Personal rankings</SectionTitle>
+          <p className="text-sm text-muted">
             Only {player.displayName}&apos;s own picks, {rated ? "rated picks only" : "every pick"}; every match counts the same.
           </p>
         </header>
-        <nav aria-label="Personal ranking scope" className="flex flex-wrap gap-2">
-          {scopes.map((s) => {
-            const current = s.categoryId === scope.categoryId;
-            return (
-              <Link
-                key={s.categoryId ?? "overall"}
-                href={href(s.categoryId, rated)}
-                aria-current={current ? "page" : undefined}
-                className={`rounded-full border px-3 py-1 text-sm ${current ? "border-zinc-900 bg-zinc-900 text-white" : "border-zinc-300 bg-white text-zinc-700 hover:border-zinc-500"}`}
-              >
-                {s.name}
-              </Link>
-            );
-          })}
-        </nav>
+        <ChipNav
+          label="Personal ranking scope"
+          items={scopes.map((s) => ({
+            key: s.categoryId ?? "overall",
+            href: href(s.categoryId, rated),
+            label: s.name,
+            current: s.categoryId === scope.categoryId,
+          }))}
+        />
         <VersionSwitch rated={rated} ratedHref={href(scope.categoryId, true)} unratedHref={href(scope.categoryId, false)} />
         <RankingList
           ranking={ranking}
@@ -109,10 +103,8 @@ export default async function ProfilePage({ params, searchParams }: PageProps<"/
         />
       </section>
 
-      <section aria-labelledby="past-tournaments-heading" className="mt-8 flex flex-col gap-3">
-        <h2 id="past-tournaments-heading" className="text-xl font-semibold tracking-tight">
-          Past tournaments
-        </h2>
+      <section aria-labelledby="past-tournaments-heading" className="flex flex-col gap-3">
+        <SectionTitle id="past-tournaments-heading">Past tournaments</SectionTitle>
         {tournaments.length > 0 ? (
           <ul aria-labelledby="past-tournaments-heading" className="flex flex-col gap-2">
             {tournaments.map((t) => (
@@ -122,41 +114,32 @@ export default async function ProfilePage({ params, searchParams }: PageProps<"/
             ))}
           </ul>
         ) : (
-          <p className="text-zinc-600">{player.displayName} hasn&apos;t played a tournament yet.</p>
+          <Notice>{player.displayName} hasn&apos;t played a tournament yet.</Notice>
         )}
       </section>
 
-      {banStatus && (
-        <div className="mt-8">
-          <PlayerModeration key={player.displayName} playerId={player.id} displayName={player.displayName} status={banStatus} />
-        </div>
-      )}
+      {banStatus && <PlayerModeration key={player.displayName} playerId={player.id} displayName={player.displayName} status={banStatus} />}
 
       {viewer?.playerId === player.id ? (
-        <div className="mt-8">
-          <DeleteAccount displayName={player.displayName} />
-        </div>
+        <DeleteAccount displayName={player.displayName} />
       ) : (
-        <div className="mt-8">
-          <ReportForm targetType="profile" targetId={player.id} label={player.displayName} />
-        </div>
+        <ReportForm targetType="profile" targetId={player.id} label={player.displayName} />
       )}
-    </main>
+    </Page>
   );
 }
 
 function PastTournamentItem({ tournament: t }: { tournament: PastTournament }) {
   const date = new Date(t.createdAt).toLocaleDateString("en-US", { dateStyle: "medium", timeZone: "America/New_York" });
   const summary = (
-    <span className="flex flex-1 flex-wrap items-baseline justify-between gap-x-3">
-      <span>
-        <span className="font-medium">{t.scopeName}</span>
-        <span className="text-zinc-600">
-          {" "}
-          · {t.size} contestants · {t.rated ? "Rated" : "Unrated"} · {date}
+    <span className="flex flex-1 flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+      <span className="min-w-0">
+        <span className="font-display text-lg tracking-wide uppercase">{t.scopeName}</span>
+        <span className="block text-[13px] text-muted">
+          {t.size} contestants · {t.rated ? "Rated" : "Unrated"} · {date}
         </span>
       </span>
-      <span className="text-sm text-zinc-700">
+      <span className={`text-sm font-semibold ${t.ranking ? "text-orange-bright" : "text-zinc-100"}`}>
         {t.ranking
           ? `Winner: ${t.ranking[0]?.contestants[0]?.name ?? "—"}`
           : t.status === "given_up"
@@ -167,18 +150,20 @@ function PastTournamentItem({ tournament: t }: { tournament: PastTournament }) {
       </span>
     </span>
   );
-  if (!t.ranking) return <div className="rounded-xl border border-zinc-200 bg-white px-4 py-3">{summary}</div>;
+  if (!t.ranking) return <div className={plateClass("default", "px-4 py-3")}>{summary}</div>;
   return (
-    <details className="rounded-xl border border-zinc-200 bg-white px-4 py-3">
-      <summary className="flex cursor-pointer list-none">{summary}</summary>
-      <ol aria-label="Tournament ranking" className="mt-3 flex flex-col gap-2">
-        {t.ranking.map((tier) => (
+    <details className={plateClass("default", "group px-4 py-3 open:border-orange")}>
+      <summary className="flex cursor-pointer list-none [&::-webkit-details-marker]:hidden">{summary}</summary>
+      <ol aria-label="Tournament ranking" className="mt-3 flex flex-col gap-1.5 border-t-2 border-edge pt-3">
+        {t.ranking.map((tier, i) => (
           <li key={tier.place} className="flex gap-3">
-            <span className="w-20 shrink-0 pt-1 text-sm font-semibold">{tier.place}</span>
+            <span className={`w-20 shrink-0 pt-1 font-display text-base uppercase italic ${i === 0 ? "text-pink-bright" : "text-orange-bright"}`}>
+              {tier.place}
+            </span>
             <span className="flex flex-wrap gap-2">
               {tier.contestants.map((c) => (
                 <span key={c.id} className="flex items-center gap-2 text-sm">
-                  <Image src={c.picture128Url} alt="" width={128} height={128} className="size-8 rounded object-cover" />
+                  <ContestantThumb src={c.picture128Url} size="sm" />
                   {c.name}
                 </span>
               ))}

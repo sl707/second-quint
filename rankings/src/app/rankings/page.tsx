@@ -2,32 +2,30 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { createVisitorClient } from "@/lib/supabase/server";
 import { listRankingScopes } from "@/server/rankings";
+import { eyebrowClass, Page, PageHeader } from "../ui/frame";
 
 export const metadata: Metadata = { title: "Rankings" };
 
+const linkClass =
+  "flex items-center justify-between gap-3 border-2 border-edge bg-plate px-4 py-3 font-display text-lg tracking-wide uppercase transition hover:border-pink hover:bg-raised";
+
 export default async function RankingsPage() {
   const [overall, ...categories] = await listRankingScopes(await createVisitorClient());
-  const linkClass =
-    "flex items-center justify-between rounded-xl border border-zinc-200 bg-white px-4 py-3 font-medium hover:border-zinc-400";
 
   return (
-    <main className="mx-auto flex w-full max-w-xl flex-1 flex-col gap-8 px-5 py-8">
-      <header className="flex flex-col gap-1">
-        <Link href="/" className="text-sm text-zinc-500 hover:text-zinc-800">
-          ← Second Quint Rankings
-        </Link>
-        <h1 className="text-2xl font-semibold tracking-tight">Rankings</h1>
-        <p className="text-zinc-600">Everyone&apos;s picks combined, ordered by Score.</p>
-      </header>
+    <Page>
+      <PageHeader back={{ href: "/", label: "Second Quint Rankings" }} title="Rankings" neon>
+        <p>Everyone&apos;s picks combined, ordered by Score.</p>
+      </PageHeader>
 
-      <Link href="/rankings/overall" className={linkClass}>
-        {overall.name}
-        <span className="text-sm font-normal text-zinc-500">Every contestant</span>
+      <Link href="/rankings/overall" className={`${linkClass} -skew-x-6 border-pink py-5 text-2xl shadow-[6px_6px_0_var(--color-pink)]`}>
+        <span className="skew-x-6">{overall.name}</span>
+        <span className="skew-x-6 font-sans text-[13px] font-semibold tracking-widest text-orange-bright">Every contestant</span>
       </Link>
 
       {categories.length > 0 && (
         <section aria-labelledby="category-rankings" className="flex flex-col gap-2">
-          <h2 id="category-rankings" className="text-sm font-medium uppercase tracking-wide text-zinc-500">
+          <h2 id="category-rankings" className={eyebrowClass}>
             Category Rankings
           </h2>
           <ul className="flex flex-col gap-2">
@@ -35,12 +33,15 @@ export default async function RankingsPage() {
               <li key={c.categoryId}>
                 <Link href={`/rankings/categories/${c.categoryId}`} className={linkClass}>
                   {c.name}
+                  <span aria-hidden className="text-pink-bright">
+                    ▶
+                  </span>
                 </Link>
               </li>
             ))}
           </ul>
         </section>
       )}
-    </main>
+    </Page>
   );
 }

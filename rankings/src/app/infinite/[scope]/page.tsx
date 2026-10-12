@@ -8,6 +8,9 @@ import { GameError, getInfinitePair, isSignedIn, type InfinitePair } from "@/ser
 import { isVisitorVerified } from "@/server/human-check";
 import { AllowanceCountdown } from "../../allowance-countdown";
 import { HumanCheck } from "../../human-check";
+import { Button, inlineLinkClass } from "../../ui/button";
+import { RatedChip } from "../../ui/chip";
+import { Notice } from "../../ui/plate";
 import { startInfiniteModeAction } from "../actions";
 import { InfinitePlay } from "./infinite-play";
 
@@ -36,61 +39,64 @@ export default async function InfiniteModePage({ params, searchParams }: PagePro
   const needsHumanCheck = !!person && !isSignedIn(person) && !(await isVisitorVerified(createAdminClient(), person));
 
   return (
-    <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-6 px-4 py-5 md:px-8 md:py-8">
-      <header className="flex flex-wrap items-end justify-between gap-2">
-        <div className="flex flex-col gap-1">
-          <Link href="/infinite" className="text-sm text-zinc-500 hover:text-zinc-800">
-            ← Infinite Mode
-          </Link>
-          <h1 className="text-xl font-semibold tracking-tight md:text-2xl">{pair?.scopeName ?? "Infinite Mode"}</h1>
-        </div>
-        {pair && (
-          <div className="flex flex-col gap-1">
-            <PlayStatus play={pair.play} scope={scope} />
-            {pair.allowanceResetsAt && (
-              <p className="text-sm text-zinc-600">
+    <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-4 pb-16">
+      <header className="bg-gradient-to-r from-pink to-orange p-1.5">
+        <div className="flex -skew-x-3 flex-col gap-1 bg-ink px-3 py-2">
+          <div className="flex skew-x-3 flex-wrap items-end justify-between gap-x-3 gap-y-1">
+            <div className="flex min-w-0 flex-col gap-0.5">
+              <Link href="/infinite" className="text-[13px] font-semibold text-zinc-200 hover:text-white">
+                ← Infinite Mode
+              </Link>
+              <h1 className="truncate pr-[0.15em] font-display text-2xl leading-none uppercase italic md:text-3xl">
+                {pair?.scopeName ?? "Infinite Mode"}
+              </h1>
+            </div>
+            {pair?.allowanceResetsAt && (
+              <p className="text-[13px] text-zinc-200">
                 Rated allowance resets at midnight Eastern, in{" "}
-                <AllowanceCountdown resetsAt={pair.allowanceResetsAt} renderedAt={now.toISOString()} />.
+                <span className="font-semibold text-orange-bright tabular-nums">
+                  <AllowanceCountdown resetsAt={pair.allowanceResetsAt} renderedAt={now.toISOString()} />
+                </span>
+                .
               </p>
             )}
           </div>
-        )}
+          {pair && (
+            <div className="skew-x-3">
+              <PlayStatus play={pair.play} scope={scope} />
+            </div>
+          )}
+        </div>
       </header>
 
-      {pair && needsHumanCheck && <HumanCheck />}
+      {pair && needsHumanCheck && (
+        <div className="px-4">
+          <HumanCheck />
+        </div>
+      )}
       {pair && !needsHumanCheck && <InfinitePlay pair={pair} />}
 
       {problem && (
-        <p className="rounded-xl border border-zinc-200 bg-white p-4 text-zinc-700">
-          {problem}{" "}
-          <Link href="/infinite" className="font-medium underline">
-            Choose another scope
-          </Link>
-        </p>
+        <div className="px-4">
+          <Notice tone="warn">
+            {problem}{" "}
+            <Link href="/infinite" className={inlineLinkClass}>
+              Choose another scope
+            </Link>
+          </Notice>
+        </div>
       )}
 
       {!person && (
-        <form action={startInfiniteModeAction} className="flex flex-col items-start gap-3">
+        <form action={startInfiniteModeAction} className="flex flex-col items-start gap-4 px-4">
           <input type="hidden" name="scope" value={scope} />
-          <p className="text-zinc-700">Pick the winner of one pair after another, for as long as you like.</p>
-          <button type="submit" className="rounded-xl bg-zinc-900 px-5 py-3 font-medium text-white hover:bg-zinc-700">
-            Start Infinite Mode
-          </button>
+          <p className="text-zinc-100">Pick the winner of one pair after another, for as long as you like.</p>
+          <Button size="lg">
+            <span aria-hidden>▶ </span>Start Infinite Mode
+          </Button>
         </form>
       )}
     </main>
-  );
-}
-
-function Badge({ rated }: { rated: boolean }) {
-  return (
-    <span
-      className={`rounded-full px-2 py-0.5 text-xs font-medium uppercase tracking-wide ${
-        rated ? "bg-zinc-900 text-white" : "bg-zinc-200 text-zinc-700"
-      }`}
-    >
-      {rated ? "Rated" : "Unrated"}
-    </span>
   );
 }
 
@@ -98,22 +104,22 @@ function Badge({ rated }: { rated: boolean }) {
 function PlayStatus({ play, scope }: { play: InfinitePair["play"]; scope: string }) {
   if (play.rated) {
     return (
-      <p className="text-sm text-zinc-600">
-        <Badge rated /> {play.ratedPicksLeft} rated {play.ratedPicksLeft === 1 ? "pick" : "picks"} left today ·{" "}
+      <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[13px] text-zinc-100">
+        <RatedChip rated /> {play.ratedPicksLeft} rated {play.ratedPicksLeft === 1 ? "pick" : "picks"} left today ·{" "}
         {play.ratedSkipsLeft} of {RATED_SKIPS_PER_DAY} rated skips left
       </p>
     );
   }
   return (
-    <p className="text-sm text-zinc-600">
-      <Badge rated={false} />{" "}
+    <p className="text-[13px] text-zinc-100">
+      <RatedChip rated={false} />{" "}
       {play.reason === "allowance-used-up"
         ? "Your rated allowance here is used up for today, so picks are unrated until midnight Eastern. Skip as often as you like."
         : "Skip as often as you like."}
       {play.reason === "chose-unrated" && (
         <>
           {" "}
-          <Link href={`/infinite/${scope}`} className="font-medium underline">
+          <Link href={`/infinite/${scope}`} className={inlineLinkClass}>
             Play rated
           </Link>
         </>

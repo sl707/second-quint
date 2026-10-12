@@ -4,6 +4,9 @@
 
 import { useEffect, useState, useTransition } from "react";
 import type { SimilarContestant } from "@/server/catalog";
+import { Button } from "../../ui/button";
+import { Field, inputClass } from "../../ui/field";
+import { Alert } from "../../ui/plate";
 import { addToCategoryAction, searchContestantsAction } from "../actions";
 
 /** Search the catalog and add existing contestants to a category. */
@@ -34,45 +37,27 @@ export function AddContestants({ categoryId, memberIds }: { categoryId: string; 
 
   return (
     <div className="flex flex-col gap-3">
-      <label className="flex flex-col gap-2">
-        <span className="text-sm font-medium uppercase tracking-wide text-zinc-500">Find a contestant</span>
-        <input
-          type="search"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          autoComplete="off"
-          placeholder="Name"
-          className="rounded-xl border border-zinc-300 bg-white px-4 py-3"
-        />
-      </label>
+      <Field label="Find a contestant">
+        <input type="search" value={query} onChange={(e) => setQuery(e.target.value)} autoComplete="off" placeholder="Name" className={inputClass} />
+      </Field>
       {results.length > 0 && (
         <ul aria-label="Search results" className="flex flex-col gap-1">
           {results.map((c) => (
-            <li key={c.id} className="flex items-center gap-2 rounded-lg bg-white px-2 py-1.5">
-              <img src={c.picture128Url} alt="" width={32} height={32} className="size-8 rounded object-cover" />
-              <span className="flex-1">{c.name}</span>
+            <li key={c.id} className="flex items-center gap-3 border-l-4 border-edge bg-raised px-2 py-1.5">
+              <img src={c.picture128Url} alt="" width={32} height={32} className="size-8 -skew-x-6 object-cover" />
+              <span className="min-w-0 flex-1 font-semibold">{c.name}</span>
               {members.has(c.id) ? (
-                <span className="text-sm text-zinc-500">Already in</span>
+                <span className="text-[13px] text-muted">Already in</span>
               ) : (
-                <button
-                  type="button"
-                  disabled={pending}
-                  onClick={() => add(c.id)}
-                  aria-label={`Add ${c.name}`}
-                  className="rounded-lg bg-zinc-900 px-3 py-1 text-sm font-medium text-white disabled:opacity-50"
-                >
+                <Button type="button" size="sm" disabled={pending} onClick={() => add(c.id)} aria-label={`Add ${c.name}`}>
                   Add
-                </button>
+                </Button>
               )}
             </li>
           ))}
         </ul>
       )}
-      {error && (
-        <p role="alert" className="rounded-xl bg-red-50 px-4 py-3 text-red-800">
-          {error}
-        </p>
-      )}
+      {error && <Alert>{error}</Alert>}
     </div>
   );
 }

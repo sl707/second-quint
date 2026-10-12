@@ -3,6 +3,10 @@ import Form from "next/form";
 import Link from "next/link";
 import { createVisitorClient } from "@/lib/supabase/server";
 import { searchPlayers } from "@/server/profiles";
+import { Button } from "../ui/button";
+import { inputClass } from "../ui/field";
+import { Page, PageHeader } from "../ui/frame";
+import { Notice } from "../ui/plate";
 
 export const metadata: Metadata = { title: "Find players" };
 
@@ -13,14 +17,13 @@ export default async function PlayersPage({ searchParams }: PageProps<"/players"
   const players = query ? await searchPlayers(await createVisitorClient(), query) : [];
 
   return (
-    <main className="mx-auto flex w-full max-w-xl flex-1 flex-col gap-6 px-5 py-8">
-      <header className="flex flex-col gap-1">
-        <h1 className="text-2xl font-semibold tracking-tight">Find players</h1>
-        <p className="text-zinc-600">Search by the start of a display name.</p>
-      </header>
+    <Page>
+      <PageHeader title="Find players" neon>
+        <p>Search by the start of a display name.</p>
+      </PageHeader>
 
-      <Form action="/players" role="search" className="flex gap-2">
-        <label className="flex flex-1 flex-col">
+      <Form action="/players" role="search" className="flex items-center gap-3">
+        <label className="flex min-w-0 flex-1 flex-col">
           <span className="sr-only">Display name</span>
           <input
             name="q"
@@ -30,12 +33,10 @@ export default async function PlayersPage({ searchParams }: PageProps<"/players"
             autoComplete="off"
             autoCapitalize="none"
             spellCheck={false}
-            className="rounded-xl border border-zinc-300 bg-white px-4 py-3 text-base"
+            className={inputClass}
           />
         </label>
-        <button type="submit" className="rounded-xl bg-zinc-900 px-4 py-3 font-medium text-white">
-          Search
-        </button>
+        <Button className="shrink-0">Search</Button>
       </Form>
 
       {query &&
@@ -45,16 +46,19 @@ export default async function PlayersPage({ searchParams }: PageProps<"/players"
               <li key={p.id}>
                 <Link
                   href={`/players/${encodeURIComponent(p.displayName)}`}
-                  className="block rounded-xl border border-zinc-200 bg-white px-4 py-3 font-medium hover:border-zinc-400"
+                  className="flex items-center justify-between gap-3 border-2 border-edge bg-plate px-4 py-3 font-semibold transition hover:border-pink hover:bg-raised"
                 >
                   {p.displayName}
+                  <span aria-hidden className="text-pink-bright">
+                    ▶
+                  </span>
                 </Link>
               </li>
             ))}
           </ul>
         ) : (
-          <p className="text-zinc-600">No players found.</p>
+          <Notice>No players found.</Notice>
         ))}
-    </main>
+    </Page>
   );
 }

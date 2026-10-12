@@ -51,13 +51,13 @@ export function TurnstileWidget({ siteKey }: { siteKey: string }) {
   }, [loaded, siteKey]);
 
   return (
-    <section aria-label="Human check" className="flex flex-col items-center gap-3 rounded-xl border border-zinc-200 bg-white p-4">
+    <section aria-label="Human check" className="flex flex-col items-center gap-3 border-2 border-orange bg-plate p-4">
       <Script
         src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit"
         onReady={() => setLoaded(true)}
         onError={() => setError("The human check couldn't load. Reload the page, or sign in to play.")}
       />
-      <p role="status" className="text-center text-sm text-zinc-600">
+      <p role="status" className="text-center text-sm font-semibold tracking-wider text-zinc-100 uppercase">
         {error ?? "Checking you're human before you play…"}
       </p>
       <div ref={container} />

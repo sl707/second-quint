@@ -18,10 +18,12 @@ test("a signed-out visitor plays Infinite Mode picks and a skip", async ({ page 
   // Picks appear once the human check (Turnstile's always-pass test key) is through.
   await expect(page.getByRole("button", { name: /^Pick / })).toHaveCount(2, { timeout: 15_000 });
 
-  // Phone layout: the two contestants are stacked.
+  // Phone layout: both contestants are on screen at once, side by side.
   const [first, second] = await page.getByRole("button", { name: /^Pick / }).all();
-  const [top, bottom] = [await first.boundingBox(), await second.boundingBox()];
-  expect(bottom!.y).toBeGreaterThanOrEqual(top!.y + top!.height);
+  await expect(first).toBeInViewport();
+  await expect(second).toBeInViewport();
+  const [left, right] = [await first.boundingBox(), await second.boundingBox()];
+  expect(right!.x).toBeGreaterThan(left!.x);
 
   for (const picks of ["1 pick", "2 picks", "3 picks"]) {
     const pick = page.getByRole("button", { name: /^Pick / }).last();

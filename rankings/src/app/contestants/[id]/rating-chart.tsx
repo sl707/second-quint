@@ -38,18 +38,18 @@ export function RatingChart({ history, scopeName }: { history: RatingSnapshot[];
         role="img"
         aria-label={`Rating over time in ${scopeName}: ${history.length} weekly ${history.length === 1 ? "snapshot" : "snapshots"}, latest ${Math.round(latest.rating)}`}
         viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
-        className="h-auto w-full rounded-lg bg-zinc-50"
+        className="h-auto w-full border border-edge bg-ink"
       >
-        {history.length > 1 && <polygon points={band} className="fill-sky-100" />}
-        {history.length > 1 && <polyline points={line} fill="none" className="stroke-sky-600" strokeWidth={2} />}
+        {history.length > 1 && <polygon points={band} className="fill-pink/25" />}
+        {history.length > 1 && <polyline points={line} fill="none" className="stroke-orange" strokeWidth={2} />}
         {history.map((h, i) => (
           <g key={h.week}>
-            <line x1={x(i)} x2={x(i)} y1={y(h.rating + h.range)} y2={y(h.rating - h.range)} className="stroke-sky-300" strokeWidth={2} />
-            <circle cx={x(i)} cy={y(h.rating)} r={3} className="fill-sky-600" />
+            <line x1={x(i)} x2={x(i)} y1={y(h.rating + h.range)} y2={y(h.rating - h.range)} className="stroke-pink" strokeWidth={2} />
+            <circle cx={x(i)} cy={y(h.rating)} r={3} className="fill-orange" />
           </g>
         ))}
       </svg>
-      <figcaption className="flex justify-between text-xs text-zinc-500">
+      <figcaption className="flex justify-between gap-2 text-xs text-muted">
         <span>Week of {weekLabel(history[0].week)}</span>
         <span>Rated rating, weekly</span>
         {history.length > 1 && <span>{weekLabel(latest.week)}</span>}

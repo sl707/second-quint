@@ -1,9 +1,11 @@
 import type { Metadata } from "next";
-import Image from "next/image";
 import Link from "next/link";
 import { readSignedInPlayer } from "@/lib/session";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { listCategories } from "@/server/catalog";
+import { ButtonLink } from "../ui/button";
+import { ContestantThumb } from "../ui/contestant-image";
+import { Page, PageHeader } from "../ui/frame";
 
 export const metadata: Metadata = { title: "Categories" };
 
@@ -11,22 +13,15 @@ export default async function CategoriesPage() {
   const [categories, player] = await Promise.all([listCategories(createAdminClient()), readSignedInPlayer()]);
 
   return (
-    <main className="mx-auto flex w-full max-w-xl flex-1 flex-col gap-6 px-5 py-8">
-      <header className="flex flex-col gap-1">
-        <Link href="/" className="text-sm text-zinc-500 hover:text-zinc-800">
-          ← Second Quint Rankings
-        </Link>
-        <h1 className="text-2xl font-semibold tracking-tight">Categories</h1>
-      </header>
+    <Page>
+      <PageHeader back={{ href: "/", label: "Second Quint Rankings" }} title="Categories" neon />
 
       {player && (
-        <div className="flex flex-wrap gap-2">
-          <Link href="/categories/new" className="rounded-xl bg-zinc-900 px-4 py-2 font-medium text-white hover:bg-zinc-700">
-            Create a category
-          </Link>
-          <Link href="/contestants/new" className="rounded-xl border border-zinc-300 bg-white px-4 py-2 font-medium hover:border-zinc-500">
+        <div className="flex flex-wrap gap-3">
+          <ButtonLink href="/categories/new">Create a category</ButtonLink>
+          <ButtonLink href="/contestants/new" variant="secondary">
             Add a contestant
-          </Link>
+          </ButtonLink>
         </div>
       )}
 
@@ -35,22 +30,25 @@ export default async function CategoriesPage() {
           <li key={c.id}>
             <Link
               href={`/categories/${c.id}`}
-              className="flex items-center gap-3 rounded-xl border border-zinc-200 bg-white px-3 py-2 hover:border-zinc-400"
+              className="flex items-center gap-3 border-2 border-edge bg-plate px-3 py-2 transition hover:border-pink hover:bg-raised"
             >
               {c.cover ? (
-                <Image src={c.cover.picture128Url} alt="" width={128} height={128} className="size-14 rounded-lg object-cover" />
+                <ContestantThumb src={c.cover.picture128Url} size="lg" />
               ) : (
-                <span className="size-14 rounded-lg bg-zinc-100" />
+                <span aria-hidden className="size-14 shrink-0 -skew-x-6 border-2 border-dashed border-edge" />
               )}
-              <span className="flex flex-1 flex-col">
-                <span className="font-medium">{c.name}</span>
-                <span className="line-clamp-1 text-sm text-zinc-500">{c.description}</span>
+              <span className="flex min-w-0 flex-1 flex-col">
+                <span className="font-display text-lg tracking-wide uppercase">{c.name}</span>
+                <span className="line-clamp-1 text-[13px] text-muted">{c.description}</span>
               </span>
-              <span className="text-sm text-zinc-500">{c.contestantCount}</span>
+              <span className="shrink-0 text-right">
+                <span className="block font-display text-xl leading-none text-orange-bright tabular-nums">{c.contestantCount}</span>
+                <span className="block text-xs text-muted">contestants</span>
+              </span>
             </Link>
           </li>
         ))}
       </ul>
-    </main>
+    </Page>
   );
 }
