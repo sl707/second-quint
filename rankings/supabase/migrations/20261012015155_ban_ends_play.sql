@@ -27,12 +27,13 @@ revoke execute on function private.lock_player_for_play(uuid) from public, anon,
 grant execute on function private.lock_player_for_play(uuid) to service_role;
 
 -- Banning also ends the player's unfinished tournaments as given up; unbanning doesn't reopen them.
+-- The deleted-player tombstone (no user_id) still can't be banned.
 create or replace function public.set_player_ban(p_player_id uuid, p_banned boolean, p_exclude_matches boolean) returns boolean
 language plpgsql
 set search_path = ''
 as $$
 begin
-  update public.players set banned = p_banned where id = p_player_id;
+  update public.players set banned = p_banned where id = p_player_id and user_id is not null;
   if not found then
     return false;
   end if;
