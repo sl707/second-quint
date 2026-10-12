@@ -2,7 +2,7 @@ import { afterAll, describe, expect, it } from "vitest";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { GameError, getTournament, listTournamentScopes, listUnfinishedTournaments, pickWinner, startTournament, undoLastPick, type Person } from "@/server/game";
 import { chooseDisplayName } from "@/server/profiles";
-import { createCategory, newUser, newVisitor, removeTestData, uniqueDisplayName } from "./fixtures";
+import { createCategory, newUser, newVerifiedVisitor, newVisitor, removeTestData, uniqueDisplayName } from "./fixtures";
 
 const db = createAdminClient();
 
@@ -11,7 +11,7 @@ afterAll(() => removeTestData(db));
 describe("starting a tournament", () => {
   it("defaults to 16 contestants drawn from the category", async () => {
     const { categoryId, contestantIds } = await createCategory(db, 20);
-    const visitor = newVisitor();
+    const visitor = await newVerifiedVisitor(db);
 
     const { tournamentId } = await startTournament(db, visitor, { categoryId });
     const tournament = await getTournament(db, visitor, tournamentId);
@@ -25,7 +25,7 @@ describe("starting a tournament", () => {
 
   it("defaults to the scope size when the category has fewer than 16, filling the bracket with byes", async () => {
     const { categoryId } = await createCategory(db, 6);
-    const visitor = newVisitor();
+    const visitor = await newVerifiedVisitor(db);
 
     const { tournamentId } = await startTournament(db, visitor, { categoryId });
     const tournament = await getTournament(db, visitor, tournamentId);
@@ -37,7 +37,7 @@ describe("starting a tournament", () => {
 
   it("accepts any size from 4 to the scope's contestant count", async () => {
     const { categoryId } = await createCategory(db, 10);
-    const visitor = newVisitor();
+    const visitor = await newVerifiedVisitor(db);
 
     for (const size of [4, 7, 10]) {
       const { tournamentId } = await startTournament(db, visitor, { categoryId, size });
@@ -58,7 +58,7 @@ describe("starting a tournament", () => {
   it("can draw from all contestants, across categories", async () => {
     const small = await createCategory(db, 3);
     const other = await createCategory(db, 3);
-    const visitor = newVisitor();
+    const visitor = await newVerifiedVisitor(db);
 
     const all = (await listTournamentScopes(db)).find((s) => s.categoryId === null)!;
     expect(all.contestantCount).toBeGreaterThanOrEqual(6);
@@ -82,7 +82,7 @@ async function pickNext(visitor: Person, tournamentId: string) {
 describe("picking winners", () => {
   it("stores each pick immediately as an unrated match for the anonymous visitor", async () => {
     const { categoryId } = await createCategory(db, 8);
-    const visitor = newVisitor();
+    const visitor = await newVerifiedVisitor(db);
     const { tournamentId } = await startTournament(db, visitor, { categoryId });
 
     const before = new Date();
@@ -106,7 +106,7 @@ describe("picking winners", () => {
 
   it("plays a full tournament of N matches to its tournament ranking", async () => {
     const { categoryId } = await createCategory(db, 5);
-    const visitor = newVisitor();
+    const visitor = await newVerifiedVisitor(db);
     const { tournamentId } = await startTournament(db, visitor, { categoryId });
 
     for (let i = 0; i < 5; i++) await pickNext(visitor, tournamentId);
@@ -121,7 +121,7 @@ describe("picking winners", () => {
 
   it("refuses a winner who isn't in the next match", async () => {
     const { categoryId } = await createCategory(db, 8);
-    const visitor = newVisitor();
+    const visitor = await newVerifiedVisitor(db);
     const { tournamentId } = await startTournament(db, visitor, { categoryId });
     const next = (await getTournament(db, visitor, tournamentId))!.bracket.next!;
     const outsider = (await getTournament(db, visitor, tournamentId))!.bracket.rounds[0]
@@ -133,7 +133,7 @@ describe("picking winners", () => {
 
   it("refuses a repeated pick for a match that was already decided", async () => {
     const { categoryId } = await createCategory(db, 4);
-    const visitor = newVisitor();
+    const visitor = await newVerifiedVisitor(db);
     const { tournamentId } = await startTournament(db, visitor, { categoryId });
     const first = await pickNext(visitor, tournamentId);
     await pickNext(visitor, tournamentId);
@@ -147,8 +147,8 @@ describe("picking winners", () => {
 
   it("keeps a tournament to the visitor who started it", async () => {
     const { categoryId } = await createCategory(db, 4);
-    const owner = newVisitor();
-    const stranger = newVisitor();
+    const owner = await newVerifiedVisitor(db);
+    const stranger = await newVerifiedVisitor(db);
     const { tournamentId } = await startTournament(db, owner, { categoryId });
     const next = (await getTournament(db, owner, tournamentId))!.bracket.next!;
 
@@ -165,7 +165,7 @@ describe("undoing a pick", () => {
 
   it("removes the most recent pick and its match, bringing that match back", async () => {
     const { categoryId } = await createCategory(db, 8);
-    const visitor = newVisitor();
+    const visitor = await newVerifiedVisitor(db);
     const { tournamentId } = await startTournament(db, visitor, { categoryId });
     await pickNext(visitor, tournamentId);
     const second = await pickNext(visitor, tournamentId);
@@ -180,7 +180,7 @@ describe("undoing a pick", () => {
 
   it("allows only one undo until the next pick", async () => {
     const { categoryId } = await createCategory(db, 8);
-    const visitor = newVisitor();
+    const visitor = await newVerifiedVisitor(db);
     const { tournamentId } = await startTournament(db, visitor, { categoryId });
     await pickNext(visitor, tournamentId);
     await pickNext(visitor, tournamentId);
@@ -196,7 +196,7 @@ describe("undoing a pick", () => {
 
   it("has nothing to undo before the first pick", async () => {
     const { categoryId } = await createCategory(db, 4);
-    const visitor = newVisitor();
+    const visitor = await newVerifiedVisitor(db);
     const { tournamentId } = await startTournament(db, visitor, { categoryId });
 
     expect((await getTournament(db, visitor, tournamentId))?.canUndo).toBe(false);
@@ -205,7 +205,7 @@ describe("undoing a pick", () => {
 
   it("can take back the final pick, reopening the tournament", async () => {
     const { categoryId } = await createCategory(db, 4);
-    const visitor = newVisitor();
+    const visitor = await newVerifiedVisitor(db);
     const { tournamentId } = await startTournament(db, visitor, { categoryId });
     for (let i = 0; i < 4; i++) await pickNext(visitor, tournamentId);
 
@@ -219,7 +219,7 @@ describe("undoing a pick", () => {
 
   it("is only for the visitor who started the tournament", async () => {
     const { categoryId } = await createCategory(db, 4);
-    const owner = newVisitor();
+    const owner = await newVerifiedVisitor(db);
     const { tournamentId } = await startTournament(db, owner, { categoryId });
     await pickNext(owner, tournamentId);
 
@@ -231,7 +231,7 @@ describe("undoing a pick", () => {
 describe("resuming", () => {
   it("lists the visitor's unfinished tournaments, newest first, with matches left", async () => {
     const { categoryId } = await createCategory(db, 4);
-    const visitor = newVisitor();
+    const visitor = await newVerifiedVisitor(db);
     const finished = await startTournament(db, visitor, { categoryId });
     for (let i = 0; i < 4; i++) await pickNext(visitor, finished.tournamentId);
     const older = await startTournament(db, visitor, { categoryId });

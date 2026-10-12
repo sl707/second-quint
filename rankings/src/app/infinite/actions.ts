@@ -4,7 +4,9 @@ import { refresh } from "next/cache";
 import { redirect } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { ensurePerson, readPerson } from "@/lib/session";
+import { readClientIp } from "@/lib/visitor";
 import { GameError, pickInfiniteWinner, skipInfinitePair } from "@/server/game";
+import { SignedOutPlayError } from "@/server/human-check";
 
 /**
  * Gives a signed-out browser its visitor ID, then opens Infinite Mode on the form's scope ("all" or
@@ -32,7 +34,12 @@ export async function playInfiniteAction(state: InfinitePlayState, form: FormDat
       await skipInfinitePair(createAdminClient(), person, { pairId });
       next = { message: "Skipped.", picks: state.picks };
     } else {
-      const { rated } = await pickInfiniteWinner(createAdminClient(), person, { pairId, winnerId: String(winnerId) });
+      const { rated } = await pickInfiniteWinner(
+        createAdminClient(),
+        person,
+        { pairId, winnerId: String(winnerId) },
+        { ip: await readClientIp() },
+      );
       const lastRated =
         rated && form.get("lastRatedPick") !== null
           ? " That was your last rated pick in this scope today; your picks are unrated until midnight Eastern."
@@ -45,8 +52,10 @@ export async function playInfiniteAction(state: InfinitePlayState, form: FormDat
   } catch (error) {
     if (!(error instanceof GameError)) throw error;
     // A repeated tap or another tab; the refresh shows the pair that's actually offered. A skip can
-    // also be refused when the rated skips are used up.
-    next = { message: winnerId === null ? error.message : null, picks: state.picks };
+    // also be refused when the rated skips are used up, and a signed-out pick by the human check or
+    // the rate limit.
+    const shown = winnerId === null || error instanceof SignedOutPlayError;
+    next = { message: shown ? error.message : null, picks: state.picks };
   }
   refresh();
   return next;

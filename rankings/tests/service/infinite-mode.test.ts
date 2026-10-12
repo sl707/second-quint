@@ -9,7 +9,7 @@ import {
   type Person,
 } from "@/server/game";
 import { refreshGlobalRankings } from "@/server/rankings";
-import { createCategory, newPlayer, newVisitor, recordMatch, removeTestData } from "./fixtures";
+import { createCategory, newPlayer, newVerifiedVisitor, newVisitor, recordMatch, removeTestData } from "./fixtures";
 
 const db = createAdminClient();
 
@@ -29,7 +29,7 @@ async function matchesBy(person: Person) {
 describe("Infinite Mode picks", () => {
   it("stores a signed-out visitor's pick at once as an unrated match in the category it was drawn from", async () => {
     const { categoryId, contestantIds } = await createCategory(db, 6);
-    const visitor = newVisitor();
+    const visitor = await newVerifiedVisitor(db);
 
     const first = await getInfinitePair(db, visitor, categoryId);
     expect(first.contestants).toHaveLength(2);
@@ -62,7 +62,7 @@ describe("Infinite Mode picks", () => {
 
   it("offers the same pair again until it's picked or skipped", async () => {
     const { categoryId } = await createCategory(db, 10);
-    const visitor = newVisitor();
+    const visitor = await newVerifiedVisitor(db);
 
     const shown = await getInfinitePair(db, visitor, categoryId);
     expect(await getInfinitePair(db, visitor, categoryId)).toEqual(shown);
@@ -70,7 +70,7 @@ describe("Infinite Mode picks", () => {
 
   it("records a repeated tap on the same pair only once", async () => {
     const { categoryId } = await createCategory(db, 6);
-    const visitor = newVisitor();
+    const visitor = await newVerifiedVisitor(db);
     const pair = await getInfinitePair(db, visitor, categoryId);
 
     await pickInfiniteWinner(db, visitor, { pairId: pair.pairId, winnerId: pair.contestants[0].id });
@@ -82,7 +82,7 @@ describe("Infinite Mode picks", () => {
 
   it("only accepts a winner from the pair shown, to the person it was shown to", async () => {
     const { categoryId, contestantIds } = await createCategory(db, 6);
-    const visitor = newVisitor();
+    const visitor = await newVerifiedVisitor(db);
     const pair = await getInfinitePair(db, visitor, categoryId);
     const outsider = contestantIds.find((id) => !pair.contestants.some((c) => c.id === id))!;
 
@@ -99,7 +99,7 @@ describe("Infinite Mode picks", () => {
     const [strong, weak] = contestantIds;
     for (let i = 0; i < 15; i++) await recordMatch(db, { winnerId: strong, loserId: weak, categoryId, rated: true });
     await refreshGlobalRankings(db);
-    const visitor = newVisitor();
+    const visitor = await newVerifiedVisitor(db);
     let seed = 11;
     const random = () => ((seed = (seed * 16807) % 2147483647) - 1) / 2147483646;
 
@@ -135,7 +135,7 @@ describe("Infinite Mode picks", () => {
 describe("Infinite Mode skips", () => {
   it("pass on the pair without recording a match, as often as the person likes", async () => {
     const { categoryId } = await createCategory(db, 6);
-    const visitor = newVisitor();
+    const visitor = await newVerifiedVisitor(db);
 
     let pair = await getInfinitePair(db, visitor, categoryId);
     for (let i = 0; i < 8; i++) {
@@ -150,7 +150,7 @@ describe("Infinite Mode skips", () => {
 
   it("can't then pick the skipped pair", async () => {
     const { categoryId } = await createCategory(db, 6);
-    const visitor = newVisitor();
+    const visitor = await newVerifiedVisitor(db);
     const pair = await getInfinitePair(db, visitor, categoryId);
 
     await skipInfinitePair(db, visitor, { pairId: pair.pairId });

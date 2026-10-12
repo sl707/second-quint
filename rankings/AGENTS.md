@@ -39,6 +39,11 @@ Spec: `../.scratch/rankings/spec.md`. Tickets: `../.scratch/rankings/issues/`. V
 - `SUPABASE_SECRET_KEY`: full-access key for `createAdminClient()`, server-only
 - `SUPABASE_DB_URL`: direct Postgres connection, used by scripts only
 - `RANKINGS_REFRESH_SECRET`: shared secret for `POST /api/rankings/refresh` (bearer token). Supabase pg_cron calls it every 5 minutes using the URL and secret stored in Vault (`rankings_refresh_url`, `rankings_refresh_secret`); without both Vault secrets the job does nothing, as locally. Setup: `docs/ops.md`
+- `NEXT_PUBLIC_TURNSTILE_SITE_KEY` (browser, inlined at build) and `TURNSTILE_SECRET_KEY` (server-only): Cloudflare Turnstile for signed-out play. Locally, in tests, and in CI they're Cloudflare's always-pass test keys (`1x00000000000000000000AA` / `1x0000000000000000000000000000000AA`), which need internet access to `challenges.cloudflare.com`. If either is missing, signed-out picks are refused ("the human check isn't set up"); signed-in play is unaffected. Setup: `docs/ops.md`
+
+### Signed-out play protection
+
+A signed-out visitor's picks (`pickWinner`, `pickInfiniteWinner`) are accepted only after the visitor passes Cloudflare Turnstile and only up to `SIGNED_OUT_PICKS_PER_MINUTE` (30) per visitor ID and per IP in any rolling minute (`src/server/human-check.ts`); signed-in players skip both. The tournament and Infinite Mode play pages show `HumanCheck` (`src/app/human-check.tsx`, the widget in `turnstile-widget.tsx`, visible only when Turnstile wants interaction) instead of the match until `isVisitorVerified`; its token goes to `verifyVisitorAction`, which calls `verifyVisitor` (Cloudflare siteverify) and stores `visitor_verifications.verified_until` for `HUMAN_CHECK_HOURS` (24). Each pick then runs the service-role-only `claim_signed_out_pick` SQL function: refuses an unverified visitor, locks on the visitor and IP, prunes `signed_out_picks` rows older than a minute, counts, and records the pick. Refusals are `SignedOutPlayError` (a `GameError`), which the play actions show ("Slow down!…"); no match is stored. The IP comes from `x-forwarded-for` (`readClientIp` in `src/lib/visitor.ts`); when unknown, only the visitor limit applies. Service tests verify with the test token through the real siteverify (`newVerifiedVisitor` in the fixtures).
 
 ### Global rankings
 

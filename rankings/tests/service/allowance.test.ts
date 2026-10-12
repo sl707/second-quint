@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { afterAll, describe, expect, it } from "vitest";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { GameError, getAllowanceStatus, getTournament, pickWinner, startTournament, type Person } from "@/server/game";
-import { createCategory, newPlayer, newVisitor, removeTestData } from "./fixtures";
+import { createCategory, newPlayer, newVerifiedVisitor, removeTestData } from "./fixtures";
 
 const db = createAdminClient();
 
@@ -134,7 +134,7 @@ describe("starting a rated tournament", () => {
 describe("a tournament is unrated", () => {
   it("for a signed-out visitor, whatever they ask for", async () => {
     const { categoryId } = await createCategory(db, 8);
-    const visitor = newVisitor();
+    const visitor = await newVerifiedVisitor(db);
 
     const started = await startTournament(db, visitor, { categoryId, size: 4 });
     expect(started).toMatchObject({ rated: false, unratedReason: "signed-out" });

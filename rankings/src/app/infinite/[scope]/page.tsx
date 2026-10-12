@@ -5,6 +5,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { readPerson } from "@/lib/session";
 import { RATED_SKIPS_PER_DAY } from "@/domain/allowance/allowance";
 import { GameError, getInfinitePair, type InfinitePair } from "@/server/game";
+import { isVisitorVerified } from "@/server/human-check";
+import { HumanCheck } from "../../human-check";
 import { startInfiniteModeAction } from "../actions";
 import { InfinitePlay } from "./infinite-play";
 
@@ -29,6 +31,8 @@ export default async function InfiniteModePage({ params, searchParams }: PagePro
     }
   }
 
+  const needsHumanCheck = !!person && "visitorId" in person && !(await isVisitorVerified(createAdminClient(), person));
+
   return (
     <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-6 px-4 py-5 md:px-8 md:py-8">
       <header className="flex flex-wrap items-end justify-between gap-2">
@@ -41,7 +45,8 @@ export default async function InfiniteModePage({ params, searchParams }: PagePro
         {pair && <PlayStatus play={pair.play} scope={scope} />}
       </header>
 
-      {pair && <InfinitePlay pair={pair} />}
+      {pair && needsHumanCheck && <HumanCheck />}
+      {pair && !needsHumanCheck && <InfinitePlay pair={pair} />}
 
       {problem && (
         <p className="rounded-xl border border-zinc-200 bg-white p-4 text-zinc-700">

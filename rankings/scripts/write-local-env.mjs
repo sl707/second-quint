@@ -18,6 +18,9 @@ const lines = [
   `SUPABASE_SECRET_KEY=${env.SECRET_KEY}`,
   `SUPABASE_DB_URL=${env.DB_URL}`,
   `RANKINGS_REFRESH_SECRET=${randomBytes(24).toString("hex")}`,
+  // Cloudflare's Turnstile test keys: the widget always passes and siteverify accepts its dummy token.
+  `NEXT_PUBLIC_TURNSTILE_SITE_KEY=1x00000000000000000000AA`,
+  `TURNSTILE_SECRET_KEY=1x0000000000000000000000000000000AA`,
 ];
 writeFileSync(new URL("../.env.local", import.meta.url), lines.join("\n") + "\n");
 console.log("Wrote .env.local for local Supabase");

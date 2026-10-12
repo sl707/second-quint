@@ -149,3 +149,16 @@ Use this to inspect a backup or rehearse a recovery. It needs Docker, Node, and 
 **Restoring production** after a disaster works the same way: create a new Supabase project, run step 4 against its session pooler URL, run step 5 with its Storage S3 endpoint and keys, then update the app's environment variables in Vercel and the GitHub secrets.
 
 The restore was tested on 2026-10-11 against a dump of the local database, restored into a throwaway container of the Supabase Postgres image prepared like a freshly started stack: tables, rows, row-level security, and policies came back.
+
+## Bot protection for signed-out play (Cloudflare Turnstile)
+
+Signed-out picks need a passed Turnstile check (remembered for 24 hours per visitor) and are limited to 30 a minute per visitor and per IP. Without both keys below in Vercel, signed-out picks are refused with "the human check isn't set up" (signed-in play still works), so set them before launch.
+
+1. In the Cloudflare dashboard, open **Turnstile** → **Add widget**: name `second-quint-rankings`, hostname `rankings.secondquint.com` (add the Vercel preview hostname only if previews should allow signed-out play), widget mode **Managed**. Don't add `localhost`; local work uses the test keys.
+2. Copy the **Site Key** and **Secret Key**.
+3. In Vercel (Production), set `NEXT_PUBLIC_TURNSTILE_SITE_KEY` to the site key and `TURNSTILE_SECRET_KEY` to the secret, then redeploy. The site key is inlined at build time, so a redeploy is required after changing it.
+4. Check: in a private window, start an unrated tournament; the match appears after a moment (Turnstile may ask for a click) and picks go through.
+
+Local, test, and CI runs use Cloudflare's always-pass test keys (`1x00000000000000000000AA` / `1x0000000000000000000000000000000AA`), written to `.env.local` by `scripts/write-local-env.mjs`. To try a refusal locally, set `TURNSTILE_SECRET_KEY=2x0000000000000000000000000000000AA` (always fails).
+
+The rate limit's IP comes from `x-forwarded-for`, which Vercel sets and overwrites; behind another proxy that passes a client-supplied header through, the per-IP limit could be dodged (the per-visitor limit still holds). Rate-limit rows (`signed_out_picks`, with the IP) are pruned after a minute on the next signed-out pick; expired `visitor_verifications` rows are pruned on the next verification.

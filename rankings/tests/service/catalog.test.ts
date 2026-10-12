@@ -18,7 +18,7 @@ import {
 } from "@/server/catalog";
 import { GameError, getTournament, pickWinner, startTournament, undoLastPick } from "@/server/game";
 import { getGlobalRanking, refreshGlobalRankings } from "@/server/rankings";
-import { makeAdmin, newPlayer, newVisitor, recordMatch, removeTestData, testPicture } from "./fixtures";
+import { makeAdmin, newPlayer, newVerifiedVisitor, recordMatch, removeTestData, testPicture } from "./fixtures";
 
 const db = createAdminClient();
 
@@ -193,7 +193,7 @@ describe("editing and deleting contestants", () => {
     const contestants = await addContestants(creator, 4);
     const [doomed, ...others] = contestants;
     for (const c of contestants) await addContestantToCategory(db, creator, categoryId, c.id);
-    const visitor = newVisitor();
+    const visitor = await newVerifiedVisitor(db);
     const { tournamentId } = await startTournament(db, visitor, { categoryId, size: 4 });
     // Both first-round matches: one of them is the doomed contestant's.
     for (let i = 0; i < 2; i++) {

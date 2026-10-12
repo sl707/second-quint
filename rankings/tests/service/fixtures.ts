@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import sharp from "sharp";
 import { publicEnv } from "@/lib/env";
+import { verifyVisitor } from "@/server/human-check";
 
 /** Creates a category with `count` fresh contestants, so each test owns its scope. */
 export async function createCategory(db: SupabaseClient, count: number) {
@@ -39,6 +40,16 @@ export function newVisitor() {
   const visitorId = randomUUID();
   visitors.push(visitorId);
   return { visitorId };
+}
+
+/** The token Cloudflare's Turnstile test site keys hand the browser; the test secret accepts it. */
+export const TURNSTILE_TEST_TOKEN = "XXXX.DUMMY.TOKEN.XXXX";
+
+/** A visitor who has passed the human check, so their picks are accepted. */
+export async function newVerifiedVisitor(db: SupabaseClient) {
+  const visitor = newVisitor();
+  await verifyVisitor(db, visitor, TURNSTILE_TEST_TOKEN);
+  return visitor;
 }
 
 /** Stores one finished match directly, as if a visitor (or `playerId`) had picked it in Infinite Mode. */
@@ -131,6 +142,8 @@ export async function removeTestData(db: SupabaseClient) {
     await db.from("matches").delete().in("visitor_id", visitors);
     await db.from("tournaments").delete().in("visitor_id", visitors);
     await db.from("infinite_pairs").delete().in("visitor_id", visitors);
+    await db.from("signed_out_picks").delete().in("visitor_id", visitors);
+    await db.from("visitor_verifications").delete().in("visitor_id", visitors);
   }
   const { data: players } = users.length ? await db.from("players").select("id").in("user_id", users) : { data: [] };
   const playerIds = (players ?? []).map((p) => p.id as string);

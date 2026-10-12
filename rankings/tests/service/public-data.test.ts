@@ -3,7 +3,7 @@ import { afterAll, describe, expect, it } from "vitest";
 import { publicEnv } from "@/lib/env";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getTournament, pickWinner, startTournament } from "@/server/game";
-import { createCategory, newVisitor, removeTestData } from "./fixtures";
+import { createCategory, newVerifiedVisitor, removeTestData } from "./fixtures";
 
 const db = createAdminClient();
 const anyone = createClient(publicEnv.supabaseUrl, publicEnv.supabasePublishableKey, {
@@ -15,7 +15,7 @@ afterAll(() => removeTestData(db));
 describe("public data", () => {
   it("lets anyone read contestants, categories, tournaments, and matches", async () => {
     const { categoryId } = await createCategory(db, 4);
-    const visitor = newVisitor();
+    const visitor = await newVerifiedVisitor(db);
     const { tournamentId } = await startTournament(db, visitor, { categoryId });
     const next = (await getTournament(db, visitor, tournamentId))!.bracket.next!;
     await pickWinner(db, visitor, tournamentId, next.contestantIds[0]);

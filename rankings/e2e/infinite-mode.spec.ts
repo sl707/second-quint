@@ -15,6 +15,9 @@ test("a signed-out visitor plays Infinite Mode picks and a skip", async ({ page 
   await expect(page.getByRole("heading", { name: "Dog breeds" })).toBeVisible();
   await expect(page.getByText("Unrated", { exact: true })).toBeVisible();
 
+  // Picks appear once the human check (Turnstile's always-pass test key) is through.
+  await expect(page.getByRole("button", { name: /^Pick / })).toHaveCount(2, { timeout: 15_000 });
+
   // Phone layout: the two contestants are stacked.
   const [first, second] = await page.getByRole("button", { name: /^Pick / }).all();
   const [top, bottom] = [await first.boundingBox(), await second.boundingBox()];
@@ -32,6 +35,26 @@ test("a signed-out visitor plays Infinite Mode picks and a skip", async ({ page 
   await expect(page.getByRole("status")).toContainText("Skipped.");
   await expect(page.getByRole("status")).toContainText("3 picks so far");
   await expect(page.getByRole("button", { name: /^Pick / })).toHaveCount(2);
+});
+
+test("a signed-out visitor over the pick rate limit is asked to slow down", async ({ page, context }) => {
+  await page.goto("/infinite");
+  await page.getByRole("button", { name: /^Dog breeds/ }).click();
+  await expect(page.getByRole("button", { name: /^Pick / })).toHaveCount(2, { timeout: 15_000 });
+
+  const visitorId = (await context.cookies()).find((c) => c.name === "sq_visitor")!.value;
+  const now = new Date().toISOString();
+  const { error } = await admin
+    .from("signed_out_picks")
+    .insert(Array.from({ length: 30 }, () => ({ visitor_id: visitorId, picked_at: now })));
+  expect(error).toBeNull();
+  try {
+    await page.getByRole("button", { name: /^Pick / }).first().click();
+    await expect(page.getByRole("status")).toContainText("Slow down!");
+    await expect(page.getByRole("status")).not.toContainText("so far");
+  } finally {
+    await admin.from("signed_out_picks").delete().eq("visitor_id", visitorId);
+  }
 });
 
 test("a signed-in player plays rated with a skip counter, or chooses unrated", async ({ page, context, baseURL }) => {

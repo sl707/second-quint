@@ -4,7 +4,9 @@ import { refresh } from "next/cache";
 import { redirect } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { ensurePerson, readPerson } from "@/lib/session";
+import { readClientIp } from "@/lib/visitor";
 import { GameError, giveUpTournament, pickWinner, startTournament, undoLastPick } from "@/server/game";
+import { SignedOutPlayError } from "@/server/human-check";
 
 export type StartTournamentState = { error: string | null };
 
@@ -33,20 +35,37 @@ export async function startTournamentAction(_: StartTournamentState, form: FormD
   redirect(`/tournaments/${tournamentId}`);
 }
 
-/** Runs a play action, ignoring broken rules from stale screens (a repeated tap, another tab); the refresh shows the truth. */
+/**
+ * Runs a play action, ignoring broken rules from stale screens (a repeated tap, another tab); the
+ * refresh shows the truth. Refusals by the signed-out human check or rate limit are passed on.
+ */
 async function play(action: () => Promise<void>) {
   try {
     await action();
   } catch (error) {
-    if (!(error instanceof GameError)) throw error;
+    if (!(error instanceof GameError) || error instanceof SignedOutPlayError) throw error;
   }
   refresh();
 }
 
-export async function pickWinnerAction(tournamentId: string, matchIndex: number, winnerId: string) {
+/** Why the last pick wasn't taken, when the signed-out human check or rate limit refused it. */
+export type PickState = { message: string | null };
+
+export async function pickWinnerAction(_: PickState, form: FormData): Promise<PickState> {
   const person = await readPerson();
-  if (!person) return;
-  await play(() => pickWinner(createAdminClient(), person, tournamentId, winnerId, { matchIndex }));
+  if (!person) return { message: null };
+  const tournamentId = String(form.get("tournamentId") ?? "");
+  const matchIndex = Number(form.get("matchIndex"));
+  const winnerId = String(form.get("winnerId") ?? "");
+  const ip = await readClientIp();
+  try {
+    await play(() => pickWinner(createAdminClient(), person, tournamentId, winnerId, { matchIndex, ip }));
+  } catch (error) {
+    if (!(error instanceof SignedOutPlayError)) throw error;
+    refresh();
+    return { message: error.message };
+  }
+  return { message: null };
 }
 
 export async function undoLastPickAction(tournamentId: string) {

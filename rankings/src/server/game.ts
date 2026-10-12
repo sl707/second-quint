@@ -5,6 +5,8 @@ import { INFINITE_MODE_MIN_SCOPE, pickInfinitePair, UNJUDGED_RATING } from "@/do
 import { drawBracket, playBracket, type BracketState, type Random, type Slot } from "@/domain/tournament/bracket";
 import { matchCountFor } from "@/domain/tournament/match-count";
 import { MIN_TOURNAMENT_SIZE, tournamentSizeOptions, type TournamentSizeOptions } from "@/domain/tournament/size";
+import { GameError } from "@/server/game-error";
+import { claimSignedOutPick } from "@/server/human-check";
 
 /** A signed-out visitor, known by the anonymous visitor ID kept in their browser. */
 export type Visitor = { visitorId: string };
@@ -77,8 +79,7 @@ export type PastTournament = {
   ranking: { place: string; contestants: ContestantCard[] }[] | null;
 };
 
-/** A play rule was broken; the message is safe to show to the person playing. */
-export class GameError extends Error {}
+export { GameError };
 
 const ALL_CONTESTANTS = "All contestants";
 const PAGE = 1000;
@@ -369,6 +370,12 @@ async function requireOwnTournament(db: SupabaseClient, person: Person, tourname
 }
 
 /**
+ * Where and when a pick is made. A signed-out visitor's pick needs a passed human check
+ * (`verifyVisitor`) and is rate-limited per visitor and per IP.
+ */
+export type SignedOutPickContext = { ip?: string | null; now?: Date };
+
+/**
  * Records the person's pick for the tournament's next match. Passing the `matchIndex` they
  * were shown guards against a repeated tap landing on the following match.
  */
@@ -377,7 +384,7 @@ export async function pickWinner(
   person: Person,
   tournamentId: string,
   winnerId: string,
-  options: { matchIndex?: number } = {},
+  options: { matchIndex?: number } & SignedOutPickContext = {},
 ): Promise<void> {
   await requireNotBanned(db, person);
   const { row, bracket } = await requireOwnTournament(db, person, tournamentId);
@@ -387,6 +394,7 @@ export async function pickWinner(
     throw new GameError("That match was already picked.");
   }
   if (!next.contestantIds.includes(winnerId)) throw new GameError("That contestant isn't in the current match.");
+  if (!("playerId" in person)) await claimSignedOutPick(db, person, options);
 
   const { error } = await db.from("matches").insert({
     winner_id: winnerId,
@@ -652,7 +660,7 @@ export async function pickInfiniteWinner(
   db: SupabaseClient,
   person: Person,
   { pairId, winnerId }: { pairId: string; winnerId: string },
-  { now = new Date() }: { now?: Date } = {},
+  { now = new Date(), ip = null }: SignedOutPickContext = {},
 ): Promise<InfinitePick> {
   await requireNotBanned(db, person);
   const row = await requireOfferedPair(db, person, pairId);
@@ -660,6 +668,7 @@ export async function pickInfiniteWinner(
     throw new GameError("That contestant isn't in the current pair.");
   }
   const signedIn = "playerId" in person;
+  if (!signedIn) await claimSignedOutPick(db, person, { now, ip });
   const [picked] = check<{ claimed: boolean; rated: boolean }[]>(
     await db.rpc("pick_infinite_pair", {
       p_pair_id: row.id,

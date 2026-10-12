@@ -4,7 +4,7 @@ import { publicEnv } from "@/lib/env";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getInfinitePair, getTournament, pickInfiniteWinner, pickWinner, startTournament } from "@/server/game";
 import { getGlobalRanking, refreshGlobalRankings, type GlobalRanking } from "@/server/rankings";
-import { createCategory, newPlayer, newVisitor, recordMatch, removeTestData } from "./fixtures";
+import { createCategory, newPlayer, newVerifiedVisitor, recordMatch, removeTestData } from "./fixtures";
 
 const db = createAdminClient();
 const anyone = createClient(publicEnv.supabaseUrl, publicEnv.supabasePublishableKey, {
@@ -162,7 +162,7 @@ describe("which rankings a match feeds", () => {
 
   it("an unrated pick, like a signed-out visitor's, feeds only the unrated rankings", async () => {
     const { categoryId, contestantIds } = await createCategory(db, 2);
-    const visitor = newVisitor();
+    const visitor = await newVerifiedVisitor(db);
     const pair = await getInfinitePair(db, visitor, categoryId);
     const [winner, loser] = pair.contestants;
     expect(await pickInfiniteWinner(db, visitor, { pairId: pair.pairId, winnerId: winner.id })).toEqual({ rated: false });

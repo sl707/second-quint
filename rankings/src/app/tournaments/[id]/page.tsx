@@ -4,9 +4,12 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { readPerson } from "@/lib/session";
-import { getTournament, isBanned, type ContestantCard, type Tournament } from "@/server/game";
-import { giveUpTournamentAction, pickWinnerAction, undoLastPickAction } from "../actions";
+import { getTournament, isBanned, type ContestantCard } from "@/server/game";
+import { isVisitorVerified } from "@/server/human-check";
+import { HumanCheck } from "../../human-check";
+import { giveUpTournamentAction, undoLastPickAction } from "../actions";
 import { BracketView, roundName } from "./bracket-view";
+import { MatchPicker } from "./match-picker";
 
 export const metadata: Metadata = { title: "Tournament" };
 
@@ -20,6 +23,7 @@ export default async function TournamentPage({ params }: PageProps<"/tournaments
   const left = bracket.matchesLeft;
   const banned = await isBanned(createAdminClient(), person);
   const playable = tournament.status === "in_progress" && !banned;
+  const needsHumanCheck = !!person && "visitorId" in person && !(await isVisitorVerified(createAdminClient(), person));
 
   return (
     <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-6 px-4 py-5 md:px-8 md:py-8">
@@ -50,27 +54,18 @@ export default async function TournamentPage({ params }: PageProps<"/tournaments
         <p className="rounded-xl border border-zinc-200 bg-white p-4 text-zinc-700">Your account is banned, so you can&apos;t play.</p>
       )}
 
-      {playable && bracket.next && (
+      {playable && bracket.next && needsHumanCheck && <HumanCheck />}
+
+      {playable && bracket.next && !needsHumanCheck && (
         <section aria-label="Current match" className="flex flex-col gap-3">
           <h2 className="text-center text-sm font-medium uppercase tracking-wide text-zinc-500">
             {bracket.next.thirdPlace ? "Third-place match" : roundName(bracket.next.round, bracket.rounds.length)}
           </h2>
-          <div className="flex flex-col items-stretch gap-2 md:flex-row md:gap-6">
-            {bracket.next.contestantIds.map((contestantId, i) => (
-              <div key={contestantId} className="contents">
-                {i === 1 && (
-                  <span className="self-center text-xs font-semibold uppercase text-zinc-400" aria-hidden>
-                    vs
-                  </span>
-                )}
-                <PickButton
-                  tournament={tournament}
-                  matchIndex={bracket.next!.index}
-                  contestant={tournament.contestants[contestantId]}
-                />
-              </div>
-            ))}
-          </div>
+          <MatchPicker
+            tournamentId={tournament.id}
+            matchIndex={bracket.next.index}
+            contestants={bracket.next.contestantIds.map((id) => tournament.contestants[id])}
+          />
         </section>
       )}
 
@@ -154,36 +149,6 @@ function GiveUp({ tournamentId }: { tournamentId: string }) {
         </button>
       </form>
     </details>
-  );
-}
-
-function PickButton({
-  tournament,
-  matchIndex,
-  contestant,
-}: {
-  tournament: Tournament;
-  matchIndex: number;
-  contestant: ContestantCard;
-}) {
-  return (
-    <form action={pickWinnerAction.bind(null, tournament.id, matchIndex, contestant.id)} className="flex-1">
-      <button
-        type="submit"
-        aria-label={`Pick ${contestant.name}`}
-        className="group flex w-full items-center gap-4 rounded-2xl border border-zinc-200 bg-white p-3 text-left shadow-sm transition hover:border-zinc-900 active:scale-[0.99] md:flex-col md:items-center md:p-4 md:text-center"
-      >
-        <Image
-          src={contestant.picture512Url}
-          alt=""
-          width={512}
-          height={512}
-          priority
-          className="aspect-square w-28 shrink-0 rounded-xl object-cover sm:w-36 md:w-full md:max-w-72"
-        />
-        <span className="text-lg font-semibold md:text-xl">{contestant.name}</span>
-      </button>
-    </form>
   );
 }
 

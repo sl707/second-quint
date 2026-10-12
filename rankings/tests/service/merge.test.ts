@@ -12,7 +12,7 @@ import {
 } from "@/server/catalog";
 import { getInfinitePair, getTournament, pickInfiniteWinner, pickWinner, startTournament } from "@/server/game";
 import { getContestantStanding, getGlobalRanking, refreshGlobalRankings } from "@/server/rankings";
-import { createCategory, makeAdmin, newPlayer, newVisitor, recordMatch, removeTestData } from "./fixtures";
+import { createCategory, makeAdmin, newPlayer, newVerifiedVisitor, recordMatch, removeTestData } from "./fixtures";
 
 const db = createAdminClient();
 
@@ -80,7 +80,7 @@ describe("merging duplicate contestants", () => {
   it("puts the survivor in the duplicate's place in tournaments, and ends tournaments that drew both", async () => {
     const { categoryId, contestantIds } = await createCategory(db, 5);
     const [duplicate, survivor, a, b, c] = contestantIds;
-    const visitor = newVisitor();
+    const visitor = await newVerifiedVisitor(db);
     const withDuplicate = (await startTournament(db, visitor, { categoryId, contestantIds: [duplicate, a, b, c] })).tournamentId;
     const first = (await getTournament(db, visitor, withDuplicate))!.bracket.next!;
     await pickWinner(db, visitor, withDuplicate, first.contestantIds.includes(duplicate) ? duplicate : first.contestantIds[0]);
@@ -107,7 +107,7 @@ describe("merging duplicate contestants", () => {
     await setCategoryCover(db, admin, categoryId, duplicate);
     await recordMatch(db, { winnerId: duplicate, loserId: other, categoryId, rated: true });
     await refreshGlobalRankings(db);
-    const visitor = newVisitor();
+    const visitor = await newVerifiedVisitor(db);
     await getInfinitePair(db, visitor, categoryId);
     await reportItem(db, visitor, { type: "contestant", id: duplicate }, "Same as the other one");
 
