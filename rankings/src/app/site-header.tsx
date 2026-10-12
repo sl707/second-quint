@@ -20,8 +20,8 @@ const looks: Record<Variant, { nav: string; button: string; muted: string; brand
   },
   A: {
     nav: "sticky top-0 z-40 flex items-center gap-1 border-b-2 border-[#ff2e88] bg-black/85 px-3 py-2 backdrop-blur",
-    button: "px-2.5 py-1.5 font-arcade text-sm uppercase tracking-wider text-white/80 hover:text-[#ff8a00]",
-    muted: "text-white/50",
+    button: "whitespace-nowrap px-2 py-1.5 text-sm font-semibold uppercase tracking-wider text-zinc-200 hover:text-[#ff8a00]",
+    muted: "text-zinc-400",
     brand: (
       <Link href="/" className="mr-auto font-arcade text-xl uppercase italic tracking-wide">
         <span className="text-[#ff2e88]">2nd</span>

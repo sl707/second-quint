@@ -28,7 +28,7 @@ export const viewport: Viewport = {
 
 const bodyClass: Record<Variant, string> = {
   current: "bg-zinc-50 text-zinc-900",
-  A: "bg-[#0b0712] text-white selection:bg-[#ff2e88]",
+  A: "variant-A bg-[#0b0712] text-white selection:bg-[#ff2e88]",
   B: "gacha-bg font-gacha text-[#f6eaff]",
   C: "bg-[#171513] text-[#efe8dc] selection:bg-[#efe8dc] selection:text-[#171513]",
 };

@@ -80,16 +80,16 @@ export function VariantArcade({ tournament: t, banned, playable, needsHumanCheck
   const next = t.bracket.next;
   return (
     <main className="flex w-full flex-1 flex-col gap-5 pb-28">
-      <header className="flex items-stretch justify-between gap-2 bg-gradient-to-r from-[#ff2e88] to-[#ff8a00] px-4 py-2 text-black">
-        <div className="flex flex-col">
-          <Link href="/tournaments/new" className="text-[10px] font-bold tracking-[0.25em] uppercase opacity-70">
+      <header className="flex items-stretch justify-between gap-2 bg-gradient-to-r from-[#ff2e88] to-[#ff8a00] p-1.5">
+        <div className="flex min-w-0 flex-col justify-center gap-0.5 -skew-x-6 bg-[#0b0712] px-3 py-1.5">
+          <Link href="/tournaments/new" className="skew-x-6 text-[13px] font-semibold text-zinc-300 hover:text-white">
             ← Tournaments
           </Link>
-          <h1 className="font-arcade text-2xl leading-none uppercase italic">{t.scopeName}</h1>
+          <h1 className="skew-x-6 truncate font-arcade text-2xl leading-none text-white uppercase italic">{t.scopeName}</h1>
         </div>
-        <div className="flex flex-col items-end justify-center text-right">
-          <span className="font-arcade text-[10px] tracking-[0.25em] uppercase">{t.rated ? "Ranked bout" : "Free play"}</span>
-          <span aria-live="polite" className="font-arcade text-xl leading-none uppercase tabular-nums">
+        <div className="flex shrink-0 flex-col items-end justify-center gap-0.5 -skew-x-6 bg-[#0b0712] px-3 py-1.5 text-right">
+          <span className="skew-x-6 text-xs font-semibold tracking-wider text-zinc-300 uppercase">{t.rated ? "Ranked bout" : "Free play"}</span>
+          <span aria-live="polite" className="skew-x-6 font-arcade text-xl leading-none text-[#ff8a00] uppercase tabular-nums">
             {statusText(t)}
           </span>
         </div>
@@ -117,7 +117,7 @@ export function VariantArcade({ tournament: t, banned, playable, needsHumanCheck
       <div className="flex flex-col items-center gap-3 px-4">
         {!banned && t.canUndo && <UndoVariant tournamentId={t.id} variant="A" />}
         {playable && t.rated && (
-          <GiveUp tournamentId={t.id} summaryClass="font-arcade uppercase tracking-widest text-white/60" buttonClass="border-2 border-red-500 px-4 py-2 font-arcade uppercase text-red-400" />
+          <GiveUp tournamentId={t.id} summaryClass="text-sm font-semibold tracking-wider text-zinc-300 uppercase hover:text-white" buttonClass="border-2 border-red-500 px-4 py-2 font-arcade text-lg uppercase text-red-300" />
         )}
       </div>
       <EndedNotice t={t} className="mx-4 border-2 border-white/30 p-4" linkClass="font-bold text-[#ff8a00] underline" />
@@ -129,7 +129,7 @@ export function VariantArcade({ tournament: t, banned, playable, needsHumanCheck
           </h2>
           <ol aria-label="Tournament ranking" className="flex flex-col gap-1">
             {t.bracket.ranking.map((tier, i) => (
-              <li key={tier.place} className={`flex items-center gap-3 -skew-x-6 px-3 py-2 ${i === 0 ? "bg-[#ff2e88]" : "bg-white/5"}`}>
+              <li key={tier.place} className={`flex items-center gap-3 -skew-x-6 px-3 py-2 ${i === 0 ? "bg-[#ff2e88] text-black" : "bg-white/5"}`}>
                 <span className="w-16 skew-x-6 font-arcade text-xl uppercase">{tier.place}</span>
                 <span className="flex skew-x-6 flex-wrap gap-3">
                   {tier.contestantIds.map((cid) => (
@@ -142,41 +142,41 @@ export function VariantArcade({ tournament: t, banned, playable, needsHumanCheck
               </li>
             ))}
           </ol>
-          <Link href="/tournaments/new" className="mt-2 self-start -skew-x-12 bg-[#ff2e88] px-5 py-3 font-arcade text-xl uppercase shadow-[4px_4px_0_#ff8a00]">
+          <Link href="/tournaments/new" className="mt-2 self-start -skew-x-12 bg-[#ff2e88] px-5 py-3 font-arcade text-xl text-black uppercase shadow-[4px_4px_0_#ff8a00]">
             <span className="inline-block skew-x-12">▶ New tournament</span>
           </Link>
         </section>
       )}
 
       <section aria-labelledby="bracket-heading" className="flex flex-col gap-2">
-        <h2 id="bracket-heading" className="px-4 font-arcade text-sm tracking-[0.3em] text-white/60 uppercase">
+        <h2 id="bracket-heading" className="px-4 text-sm font-semibold tracking-[0.25em] text-zinc-300 uppercase">
           Bracket
         </h2>
         <div className="overflow-x-auto px-4 pb-2">
           <div className="flex w-max gap-3">
             {bracketRounds(t).map((round) => (
               <div key={round.name} className="flex w-40 flex-col gap-2">
-                <h3 className="font-arcade text-xs tracking-widest text-[#ff8a00] uppercase">{round.name}</h3>
+                <h3 className="text-[13px] font-semibold tracking-wider text-[#ff8a00] uppercase">{round.name}</h3>
                 <div className="flex flex-1 flex-col justify-around gap-2">
                   {[...round.matches, ...(round.extra ? [round.extra] : [])].map((match, m) => (
                     <div
                       key={m}
                       className={`-skew-x-6 border-l-4 bg-white/5 ${isNext(t, match) ? "border-[#ff2e88] shadow-[0_0_16px_-2px_#ff2e88]" : "border-white/20"}`}
                     >
-                      {match === round.extra && <div className="px-2 pt-1 text-[10px] text-white/60 uppercase">3rd place</div>}
+                      {match === round.extra && <div className="px-2 pt-1 text-xs text-zinc-300 uppercase">3rd place</div>}
                       {match.contestantIds.map((id, i) => {
                         const c = id ? t.contestants[id] : null;
                         const lost = !!match.winnerId && match.winnerId !== id;
                         const won = !!match.winnerId && match.winnerId === id && !match.bye;
                         return (
-                          <div key={i} className={`flex h-8 skew-x-6 items-center gap-2 px-2 text-sm ${lost ? "text-white/35 line-through" : ""} ${won ? "font-bold text-[#ff8a00]" : ""}`}>
+                          <div key={i} className={`flex h-8 skew-x-6 items-center gap-2 px-2 text-sm ${lost ? "text-zinc-400 line-through" : ""} ${won ? "font-bold text-[#ff8a00]" : ""}`}>
                             {c ? (
                               <>
                                 <Image src={c.picture128Url} alt="" width={128} height={128} className={`size-5 object-cover ${lost ? "opacity-30" : ""}`} />
                                 <span className="truncate">{c.name}</span>
                               </>
                             ) : (
-                              <span className="text-white/35">{match.bye ? "Bye" : "—"}</span>
+                              <span className="text-zinc-400">{match.bye ? "Bye" : "—"}</span>
                             )}
                           </div>
                         );

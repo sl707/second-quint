@@ -37,13 +37,13 @@ export function VariantArcade({ ranking, kind, path }: RankingVariantProps) {
   return (
     <main className="mx-auto flex w-full max-w-2xl flex-1 flex-col gap-5 px-4 pt-6 pb-28">
       <header className="flex flex-col gap-1">
-        <Link href="/rankings" className="font-arcade text-xs tracking-[0.3em] text-white/60 uppercase hover:text-[#ff8a00]">
+        <Link href="/rankings" className="text-[13px] font-semibold tracking-[0.2em] text-zinc-300 uppercase hover:text-[#ff8a00]">
           ← Leaderboards
         </Link>
         <h1 className="font-arcade text-5xl leading-none uppercase italic">
           <span className="animate-neon">{ranking.scopeName}</span>
         </h1>
-        <p className="text-xs tracking-widest text-white/60 uppercase">
+        <p className="text-[13px] tracking-wider text-zinc-300 uppercase">
           {kind === "Category Ranking" ? "Category · " : "High scores · "}
           {ranking.rated ? "Rated picks only" : "Every pick"} · recent matches count more
         </p>
@@ -54,16 +54,16 @@ export function VariantArcade({ ranking, kind, path }: RankingVariantProps) {
         path={path}
         base="grid grid-cols-2 gap-2"
         on="-skew-x-12 bg-[#ff2e88] py-2 text-center font-arcade text-lg uppercase tracking-widest text-black"
-        off="-skew-x-12 border-2 border-white/25 py-2 text-center font-arcade text-lg uppercase tracking-widest text-white/70 hover:border-[#ff2e88]"
+        off="-skew-x-12 border-2 border-white/25 py-2 text-center font-arcade text-lg uppercase tracking-widest text-zinc-200 hover:border-[#ff2e88]"
       />
 
       {ranking.refreshedAt === null ? (
         <p className="border-2 border-white/25 p-4 font-arcade uppercase">Insert coin: not calculated yet. Refreshes every 5 minutes.</p>
       ) : ranking.ranked.length === 0 ? (
-        <p className="text-white/70">{emptyText(ranking)}</p>
+        <p className="text-zinc-300">{emptyText(ranking)}</p>
       ) : (
         <ol aria-label={ranking.scopeName} className="flex flex-col">
-          <li aria-hidden className="grid grid-cols-[3.5rem_1fr_auto] gap-3 border-b-2 border-[#ff2e88] pb-1 font-arcade text-xs tracking-[0.3em] text-white/60 uppercase">
+          <li aria-hidden className="grid grid-cols-[3.5rem_1fr_auto] gap-3 border-b-2 border-[#ff2e88] pb-1 text-xs font-semibold tracking-[0.2em] text-zinc-300 uppercase">
             <span>Rank</span>
             <span>Name</span>
             <span>Score</span>
@@ -71,9 +71,9 @@ export function VariantArcade({ ranking, kind, path }: RankingVariantProps) {
           {ranking.ranked.map((row, i) => (
             <li
               key={row.contestant.id}
-              className={`grid grid-cols-[3.5rem_1fr_auto] items-center gap-3 border-b border-white/10 py-2 ${i < 3 ? "bg-gradient-to-r from-white/8 to-transparent" : ""}`}
+              className={`grid grid-cols-[3.5rem_1fr_auto] items-center gap-3 border-b border-white/10 py-2 ${i < 3 ? "border-l-4 border-l-[#ff2e88] bg-[#1a1422]" : ""}`}
             >
-              <span className={`text-center font-arcade leading-none italic tabular-nums ${i < 3 ? `text-5xl ${numeral[i]}` : "text-3xl text-white/45"}`}>
+              <span className={`text-center font-arcade leading-none italic tabular-nums ${i < 3 ? `text-5xl ${numeral[i]}` : "text-3xl text-zinc-400"}`}>
                 {row.position}
               </span>
               <span className="flex min-w-0 items-center gap-3">
@@ -88,7 +88,7 @@ export function VariantArcade({ ranking, kind, path }: RankingVariantProps) {
               </span>
               <span className="text-right">
                 <span className="block font-arcade text-2xl leading-none text-[#ff8a00] tabular-nums">{Math.round(row.score)}</span>
-                <span className="block font-mono text-[11px] text-white/60">
+                <span className="block font-mono text-[13px] text-zinc-300">
                   {row.wins}W {row.losses}L
                 </span>
               </span>
@@ -99,21 +99,21 @@ export function VariantArcade({ ranking, kind, path }: RankingVariantProps) {
 
       {ranking.notYetJudged.length > 0 && (
         <section aria-labelledby="not-yet-judged" className="flex flex-col gap-2">
-          <h2 id="not-yet-judged" className="font-arcade text-xl uppercase italic text-white/80">
-            New challengers <span className="text-sm text-white/50 not-italic">(not yet judged)</span>
+          <h2 id="not-yet-judged" className="font-arcade text-xl uppercase italic text-white">
+            New challengers <span className="font-sans text-sm text-zinc-300 not-italic normal-case">(not yet judged)</span>
           </h2>
           <ul aria-labelledby="not-yet-judged" className="grid grid-cols-4 gap-2 sm:grid-cols-6">
             {ranking.notYetJudged.map((c) => (
-              <li key={c.id} className="flex flex-col gap-1">
-                <Image src={c.picture128Url} alt="" width={128} height={128} className="aspect-square w-full -skew-x-6 object-cover opacity-70" />
-                <span className="truncate text-center text-[11px] text-white/70 uppercase">{c.name}</span>
+              <li key={c.id} className="flex flex-col overflow-hidden border border-white/15 bg-black">
+                <Image src={c.picture128Url} alt="" width={128} height={128} className="aspect-square w-full object-cover" />
+                <span className="truncate bg-black px-1 py-1 text-center text-xs font-semibold text-zinc-200">{c.name}</span>
               </li>
             ))}
           </ul>
         </section>
       )}
 
-      {ranking.refreshedAt && <p className="font-mono text-[11px] text-white/50">Updated {updatedAt(ranking)} ET · refreshes every 5 min</p>}
+      {ranking.refreshedAt && <p className="font-mono text-[13px] text-zinc-400">Updated {updatedAt(ranking)} ET · refreshes every 5 min</p>}
     </main>
   );
 }

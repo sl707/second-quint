@@ -22,8 +22,8 @@ function PickFields({ tournamentId, matchIndex, contestant }: { tournamentId: st
 export function PickerArcade({ tournamentId, matchIndex, contestants }: PickerProps) {
   const [state, action] = useActionState(pickWinnerAction, { message: null });
   const sides = [
-    { clip: "[clip-path:polygon(0_0,100%_0,84%_100%,0_100%)]", tint: "from-[#ff2e88]", label: "P1", align: "items-start text-left pl-3" },
-    { clip: "[clip-path:polygon(16%_0,100%_0,100%_100%,0_100%)]", tint: "from-[#ff8a00]", label: "P2", align: "items-end text-right pr-3" },
+    { clip: "[clip-path:polygon(0_0,100%_0,84%_100%,0_100%)]", tint: "from-[#ff2e88]", label: "P1", labelColor: "text-[#ff4f9a]", align: "items-start text-left pl-3" },
+    { clip: "[clip-path:polygon(16%_0,100%_0,100%_100%,0_100%)]", tint: "from-[#ff8a00]", label: "P2", labelColor: "text-[#ff9a26]", align: "items-end text-right pr-3" },
   ];
   return (
     <>
@@ -34,22 +34,23 @@ export function PickerArcade({ tournamentId, matchIndex, contestants }: PickerPr
             <button
               type="submit"
               aria-label={`Pick ${contestant.name}`}
-              className="group relative block h-full w-full overflow-hidden bg-black"
+              className="group relative flex h-full w-full flex-col overflow-hidden bg-black"
             >
-              <Image
-                src={contestant.picture512Url}
-                alt=""
-                fill
-                priority
-                sizes="50vw"
-                className="object-cover transition duration-300 group-hover:scale-105 group-active:scale-110"
-              />
-              <span className={`absolute inset-0 bg-gradient-to-t ${sides[i].tint} via-transparent to-black/40 opacity-80 mix-blend-multiply`} />
-              <span className={`absolute inset-x-0 bottom-0 flex flex-col gap-1 pb-4 ${sides[i].align} ${i === 0 ? "pr-[18%]" : "pl-[18%]"}`}>
-                <span className="font-arcade text-sm tracking-[0.3em] text-white/80">{sides[i].label}</span>
-                <span className="font-arcade text-3xl leading-none text-white uppercase italic drop-shadow-[3px_3px_0_#000] md:text-5xl">
-                  {contestant.name}
-                </span>
+              <span className="relative block flex-1 overflow-hidden">
+                <Image
+                  src={contestant.picture512Url}
+                  alt=""
+                  fill
+                  priority
+                  sizes="50vw"
+                  className="object-cover transition duration-300 group-hover:scale-105 group-active:scale-110"
+                />
+                <span className={`absolute inset-x-0 top-0 h-1.5 bg-gradient-to-r ${sides[i].tint} to-transparent`} />
+                <span className="absolute inset-x-0 bottom-0 h-[55%] bg-gradient-to-t from-black from-45% via-black/95 via-60% to-transparent" />
+              </span>
+              <span className={`flex flex-col gap-1 bg-black pt-1 pb-4 ${sides[i].align} ${i === 0 ? "pr-[18%]" : "pl-[18%]"}`}>
+                <span className={`text-[13px] font-bold tracking-[0.2em] ${sides[i].labelColor}`}>{sides[i].label}</span>
+                <span className="font-arcade text-3xl leading-none text-white uppercase italic md:text-5xl">{contestant.name}</span>
               </span>
               <span className="absolute inset-0 ring-0 ring-white transition group-active:ring-8 group-active:ring-inset" />
             </button>
@@ -64,7 +65,7 @@ export function PickerArcade({ tournamentId, matchIndex, contestants }: PickerPr
           </span>
         </span>
       </div>
-      <p className="text-center font-arcade text-xs tracking-[0.3em] text-white/60 uppercase">Tap a fighter to pick</p>
+      <p className="text-center text-sm font-semibold tracking-[0.2em] text-zinc-300 uppercase">Tap a fighter to pick</p>
       {state.message && (
         <p role="status" className="mx-4 border-2 border-[#ff2e88] bg-[#ff2e88]/15 p-3 text-center text-sm font-semibold">
           {state.message}

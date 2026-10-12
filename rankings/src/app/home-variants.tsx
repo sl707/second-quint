@@ -13,10 +13,6 @@ export function VariantArcade({ appName, unfinished }: HomeProps) {
   ];
   return (
     <main className="relative flex flex-1 flex-col overflow-hidden">
-      <div
-        aria-hidden
-        className="pointer-events-none absolute inset-0 opacity-30 [background-image:linear-gradient(#ff2e8833_1px,transparent_1px),linear-gradient(90deg,#ff2e8833_1px,transparent_1px)] [background-size:32px_32px] [mask-image:linear-gradient(to_bottom,transparent,black_40%)]"
-      />
       <section className="relative mx-auto flex w-full max-w-3xl flex-col items-center gap-4 px-5 pt-8 pb-28 text-center">
         <div className="relative">
           <div aria-hidden className="absolute -inset-3 -skew-x-6 bg-gradient-to-r from-[#ff2e88] to-[#ff8a00] blur-xl opacity-60" />
@@ -33,7 +29,7 @@ export function VariantArcade({ appName, unfinished }: HomeProps) {
             {appName.split(" ").length > 1 ? appName.split(" ").at(-1) : ""}
           </span>
         </h1>
-        <p className="max-w-sm text-sm font-medium tracking-wide text-white/60 uppercase">
+        <p className="max-w-sm text-sm font-medium tracking-wide text-zinc-300 uppercase">
           Pick winners in 1v1 matches. Everyone&apos;s picks add up.
         </p>
 
@@ -48,7 +44,7 @@ export function VariantArcade({ appName, unfinished }: HomeProps) {
                   <span>
                     Continue? <span className="text-[#ff8a00]">{t.scopeName}</span>
                   </span>
-                  <span className="text-sm text-white/70">
+                  <span className="font-sans text-sm text-zinc-200">
                     {t.matchesLeft} left · {t.rated ? "Rated" : "Unrated"}
                   </span>
                 </Link>
@@ -59,7 +55,7 @@ export function VariantArcade({ appName, unfinished }: HomeProps) {
 
         <Link
           href="/tournaments/new"
-          className="group relative mt-2 w-full -skew-x-12 bg-[#ff2e88] px-6 py-5 font-arcade text-3xl uppercase tracking-wider shadow-[6px_6px_0_#ff8a00] transition active:translate-x-1 active:translate-y-1 active:shadow-none"
+          className="group relative mt-2 w-full -skew-x-12 bg-[#ff2e88] px-6 py-5 font-arcade text-3xl text-black uppercase tracking-wider shadow-[6px_6px_0_#ff8a00] transition active:translate-x-1 active:translate-y-1 active:shadow-none"
         >
           <span className="inline-block skew-x-12">▶ Start tournament</span>
         </Link>
@@ -68,10 +64,10 @@ export function VariantArcade({ appName, unfinished }: HomeProps) {
             <Link
               key={m.href}
               href={m.href}
-              className="flex items-center justify-between -skew-x-12 border-2 border-white/20 bg-white/5 px-5 py-3 transition hover:border-[#ff2e88] hover:bg-[#ff2e88]/10 sm:flex-col sm:items-start"
+              className="flex items-center justify-between -skew-x-12 border-2 border-white/20 bg-[#17121f] px-5 py-3 transition hover:border-[#ff2e88] hover:bg-[#ff2e88]/10 sm:flex-col sm:items-start"
             >
               <span className="skew-x-12 font-arcade text-xl uppercase">{m.label}</span>
-              <span className="skew-x-12 text-xs tracking-widest text-[#ff8a00] uppercase">{m.hint}</span>
+              <span className="skew-x-12 text-[13px] font-semibold tracking-widest text-[#ff9a26] uppercase">{m.hint}</span>
             </Link>
           ))}
         </nav>

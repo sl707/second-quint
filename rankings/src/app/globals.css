@@ -35,6 +35,14 @@ body {
   font-family: var(--font-geist-sans), system-ui, sans-serif;
 }
 
+/* PROTOTYPE: pages without an Arcade version keep their light cards; give them dark text on the dark body */
+.variant-A .bg-white,
+.variant-A .bg-zinc-50,
+.variant-A .bg-amber-50,
+.variant-A .bg-red-50 {
+  color: #18181b;
+}
+
 /* PROTOTYPE: variant B background and holo frame */
 .gacha-bg {
   background:
