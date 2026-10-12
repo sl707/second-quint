@@ -47,10 +47,13 @@ export async function pickWinnerAction(_: PickState, form: FormData): Promise<Pi
   return { message: await play(() => pickWinner(createAdminClient(), person, tournamentId, winnerId, { matchIndex, ip })) };
 }
 
-export async function undoLastPickAction(tournamentId: string) {
+/** Why the undo wasn't taken, if it wasn't. */
+export type UndoState = { message: string | null };
+
+export async function undoLastPickAction(tournamentId: string): Promise<UndoState> {
   const person = await readPerson();
-  if (!person) return;
-  await play(() => undoLastPick(createAdminClient(), person, tournamentId));
+  if (!person) return { message: null };
+  return { message: await play(() => undoLastPick(createAdminClient(), person, tournamentId), { showRefusals: true }) };
 }
 
 export async function giveUpTournamentAction(tournamentId: string) {

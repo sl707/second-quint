@@ -434,6 +434,17 @@ export async function pickWinner(
   });
   if (outcome === "gone") throw new GameError(NO_MATCH_LEFT);
   if (outcome === "taken") throw new GameError(ALREADY_PICKED);
+
+  // The final pick of another tournament stays undoable only until this next pick.
+  check(
+    await db
+      .from("tournaments")
+      .update({ can_undo: false })
+      .match(ownedBy(person))
+      .eq("status", "finished")
+      .eq("can_undo", true)
+      .neq("id", row.id),
+  );
 }
 
 /**
@@ -463,15 +474,20 @@ export async function undoLastPick(db: SupabaseClient, person: Person, tournamen
     throw new GameError("There's no pick to undo.");
   }
 
-  const claimed = check(
-    await db
-      .from("tournaments")
-      .update({ can_undo: false, status: "in_progress", finished_at: null })
-      .eq("id", row.id)
-      .eq("can_undo", true)
-      .in("status", undoable)
-      .select("id"),
-  );
+  const reopened = await db
+    .from("tournaments")
+    .update({ can_undo: false, status: "in_progress", finished_at: null })
+    .eq("id", row.id)
+    .eq("can_undo", true)
+    .in("status", undoable)
+    .select("id");
+  // Reopening a finished rated tournament would make it a second unfinished rated tournament.
+  if (reopened.error?.code === "23505") {
+    throw new GameError(
+      "You can't undo the final pick while another rated tournament is unfinished. Finish or give up that one first.",
+    );
+  }
+  const claimed = check(reopened);
   if (claimed.length === 0) throw new GameError("There's no pick to undo.");
 
   check(

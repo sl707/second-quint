@@ -126,3 +126,18 @@ describe("giving up a rated tournament", () => {
     expect((await getTournament(db, player, rated.tournamentId))?.status).toBe("finished");
   });
 });
+
+describe("undoing the final pick of a rated tournament", () => {
+  it("is refused while another rated tournament is unfinished", async () => {
+    const { categoryId } = await createCategory(db, 20);
+    const player = await newPlayer(db);
+    const finished = await startTournament(db, player, { categoryId, size: 4 });
+    for (let i = 0; i < 4; i++) await pickNext(player, finished.tournamentId);
+    await startTournament(db, player, { categoryId, size: 4 });
+
+    await expect(undoLastPick(db, player, finished.tournamentId)).rejects.toThrow(
+      "You can't undo the final pick while another rated tournament is unfinished. Finish or give up that one first.",
+    );
+    expect(await getTournament(db, player, finished.tournamentId)).toMatchObject({ status: "finished", canUndo: true });
+  });
+});

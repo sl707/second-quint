@@ -217,6 +217,21 @@ describe("undoing a pick", () => {
     expect(tournament?.bracket.matchesLeft).toBe(1);
   });
 
+  it("can take back the final pick until the next pick in another tournament", async () => {
+    const { categoryId } = await createCategory(db, 4);
+    const visitor = await newVerifiedVisitor(db);
+    const finished = await startTournament(db, visitor, { categoryId });
+    for (let i = 0; i < 4; i++) await pickNext(visitor, finished.tournamentId);
+    const next = await startTournament(db, visitor, { categoryId });
+    expect((await getTournament(db, visitor, finished.tournamentId))?.canUndo).toBe(true);
+
+    await pickNext(visitor, next.tournamentId);
+
+    expect((await getTournament(db, visitor, finished.tournamentId))?.canUndo).toBe(false);
+    await expect(undoLastPick(db, visitor, finished.tournamentId)).rejects.toThrow(GameError);
+    expect((await getTournament(db, visitor, finished.tournamentId))?.status).toBe("finished");
+  });
+
   it("is only for the visitor who started the tournament", async () => {
     const { categoryId } = await createCategory(db, 4);
     const owner = await newVerifiedVisitor(db);

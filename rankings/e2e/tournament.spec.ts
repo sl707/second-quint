@@ -32,6 +32,12 @@ test("a signed-out visitor plays a full tournament to its tournament ranking", a
     await page.getByRole("button", { name: /^Pick / }).first().click();
   }
 
+  // The final pick can be taken back too, reopening the tournament.
+  await expect(page.getByRole("heading", { name: "Tournament ranking" })).toBeVisible();
+  await page.getByRole("button", { name: "Undo" }).click();
+  await expect(page.getByText("1 match left")).toBeVisible();
+  await page.getByRole("button", { name: /^Pick / }).first().click();
+
   await expect(page.getByRole("heading", { name: "Tournament ranking" })).toBeVisible();
   const ranking = page.getByRole("list", { name: "Tournament ranking" });
   for (const place of ["1st", "2nd", "3rd", "4th", "5th"]) await expect(ranking.getByText(place, { exact: true })).toBeVisible();

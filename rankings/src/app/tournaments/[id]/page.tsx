@@ -8,9 +8,10 @@ import { readPerson } from "@/lib/session";
 import { getTournament, isBanned, isSignedIn, type ContestantCard } from "@/server/game";
 import { isVisitorVerified } from "@/server/human-check";
 import { HumanCheck } from "../../human-check";
-import { giveUpTournamentAction, undoLastPickAction } from "../actions";
+import { giveUpTournamentAction } from "../actions";
 import { BracketView } from "./bracket-view";
 import { MatchPicker } from "./match-picker";
+import { UndoButton } from "./undo-button";
 
 export const metadata: Metadata = { title: "Tournament" };
 
@@ -70,16 +71,7 @@ export default async function TournamentPage({ params }: PageProps<"/tournaments
         </section>
       )}
 
-      {playable && tournament.canUndo && (
-        <form action={undoLastPickAction.bind(null, tournament.id)} className="flex justify-center">
-          <button
-            type="submit"
-            className="rounded-full border border-zinc-300 bg-white px-5 py-2 text-sm font-medium text-zinc-700 hover:border-zinc-500"
-          >
-            Undo
-          </button>
-        </form>
-      )}
+      {!banned && tournament.canUndo && <UndoButton tournamentId={tournament.id} />}
 
       {playable && tournament.rated && <GiveUp tournamentId={tournament.id} />}
 
