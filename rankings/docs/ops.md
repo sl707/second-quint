@@ -51,6 +51,22 @@ The storage alert uses the workflow's built-in `GITHUB_TOKEN`; nothing to add.
 
 Then, once the workflows are on `main`, run each one manually from the Actions tab and check that `rankings-backup` created `db/<today>/` and `pictures/current/` in the R2 bucket.
 
+## Ranking refresh (every 5 minutes)
+
+Supabase pg_cron runs `refresh-global-rankings` every 5 minutes. It uses pg_net to `POST` the app's `/api/rankings/refresh` with a shared secret, and the app recomputes and stores every global ranking. Until the two Vault secrets below exist, the job does nothing.
+
+1. Generate a secret (`openssl rand -hex 24`) and set it as `RANKINGS_REFRESH_SECRET` in Vercel (Production), then redeploy.
+2. In the Supabase SQL editor for the production project:
+
+   ```sql
+   select vault.create_secret('https://rankings.secondquint.com/api/rankings/refresh', 'rankings_refresh_url');
+   select vault.create_secret('<the same secret>', 'rankings_refresh_secret');
+   ```
+
+3. Check: after 5 minutes, `select status_code, content from net._http_response order by id desc limit 3;` shows `200` responses, and `select jobname, status, start_time from cron.job_run_details order by start_time desc limit 3;` shows successful runs.
+
+To rotate the secret, change it in Vercel, redeploy, then `select vault.update_secret((select id from vault.secrets where name = 'rankings_refresh_secret'), '<new secret>');`.
+
 ## Notifications and things to watch
 
 - **Storage alert**: you're notified through the GitHub issue (you watch your own repo by default). It's created once, its numbers are refreshed daily without notifying, and it gets a comment when a different resource crosses 80%. Close it after acting; it reopens as a new issue if usage crosses again.

@@ -31,6 +31,19 @@ Spec: `../.scratch/rankings/spec.md`. Tickets: `../.scratch/rankings/issues/`. V
 
 `cacheComponents` is off: pages render dynamically.
 
+### Environment variables
+
+`npm run db:start` writes all of these to `.env.local` for local work; production values go in Vercel.
+
+- `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`: the Supabase project, safe for the browser
+- `SUPABASE_SECRET_KEY`: full-access key for `createAdminClient()`, server-only
+- `SUPABASE_DB_URL`: direct Postgres connection, used by scripts only
+- `RANKINGS_REFRESH_SECRET`: shared secret for `POST /api/rankings/refresh` (bearer token). Supabase pg_cron calls it every 5 minutes using the URL and secret stored in Vault (`rankings_refresh_url`, `rankings_refresh_secret`); without both Vault secrets the job does nothing, as locally. Setup: `docs/ops.md`
+
+### Global rankings
+
+The ranking refresher (`refreshGlobalRankings` in `src/server/rankings.ts`) recomputes every global ranking with the pure calculation in `src/domain/ranking/` and stores one ready-made list per scope (`ranking_lists`, `ranking_entries`); ranking pages only read those rows. Service tests call `refreshGlobalRankings` directly instead of waiting for the schedule.
+
 ### Test seams
 
 - **Unit** (`npm test`): `src/**/*.test.ts`, pure domain code, including the ranking calculation
