@@ -25,6 +25,12 @@ export default async function Home() {
         Play a tournament
       </Link>
       <Link
+        href="/infinite"
+        className="self-start rounded-xl border border-zinc-300 bg-white px-5 py-3 text-lg font-medium hover:border-zinc-500"
+      >
+        Play Infinite Mode
+      </Link>
+      <Link
         href="/rankings"
         className="self-start rounded-xl border border-zinc-300 bg-white px-5 py-3 text-lg font-medium hover:border-zinc-500"
       >

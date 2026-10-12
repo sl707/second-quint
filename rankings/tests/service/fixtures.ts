@@ -108,6 +108,7 @@ export async function removeTestData(db: SupabaseClient) {
   if (visitors.length) {
     await db.from("matches").delete().in("visitor_id", visitors);
     await db.from("tournaments").delete().in("visitor_id", visitors);
+    await db.from("infinite_pairs").delete().in("visitor_id", visitors);
   }
   const { data: players } = users.length ? await db.from("players").select("id").in("user_id", users) : { data: [] };
   const playerIds = (players ?? []).map((p) => p.id as string);

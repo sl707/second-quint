@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { allowanceDay, nextAllowanceReset, ratedAllowance } from "@/domain/allowance/allowance";
 import { unratedReasonMessage, type UnratedReason } from "@/domain/allowance/rated-status";
+import { INFINITE_MODE_MIN_SCOPE, pickInfinitePair, UNJUDGED_RATING } from "@/domain/infinite/pairing";
 import { drawBracket, playBracket, type BracketState, type Random, type Slot } from "@/domain/tournament/bracket";
 import { matchCountFor } from "@/domain/tournament/match-count";
 import { tournamentSizeOptions, type TournamentSizeOptions } from "@/domain/tournament/size";
@@ -387,6 +388,164 @@ export async function undoLastPick(db: SupabaseClient, person: Person, tournamen
       .eq("tournament_id", row.id)
       .eq("bracket_match", bracket.matchesPlayed - 1),
   );
+}
+
+export type InfinitePair = {
+  pairId: string;
+  categoryId: ScopeId;
+  scopeName: string;
+  contestants: [ContestantCard, ContestantCard];
+};
+
+export type InfinitePick = { rated: boolean };
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+type InfinitePairRow = { id: string; category_id: ScopeId; first_contestant_id: string; second_contestant_id: string };
+
+const INFINITE_PAIR_COLUMNS = "id, category_id, first_contestant_id, second_contestant_id";
+
+/** `filter` arguments matching rows in the scope (`category_id` null = all contestants). */
+function inScope(categoryId: ScopeId) {
+  return ["category_id", categoryId === null ? "is" : "eq", categoryId] as const;
+}
+
+async function offeredPair(db: SupabaseClient, person: Person, categoryId: ScopeId) {
+  return check(
+    await db
+      .from("infinite_pairs")
+      .select(INFINITE_PAIR_COLUMNS)
+      .match(ownedBy(person))
+      .filter(...inScope(categoryId))
+      // A fresh signal opts out of Next.js memoizing identical GETs within one render, so a pair
+      // offered moments ago by this same render is seen.
+      .abortSignal(new AbortController().signal)
+      .maybeSingle(),
+  ) as InfinitePairRow | null;
+}
+
+/**
+ * The scope's latest global ratings and match counts, for pairing: from the rated list once the
+ * refresher stores one, else the unrated list. Contestants it hasn't judged are left out.
+ */
+async function latestRatings(db: SupabaseClient, categoryId: ScopeId) {
+  const list = check(
+    await db
+      .from("ranking_lists")
+      .select("id")
+      .filter(...inScope(categoryId))
+      .order("rated", { ascending: false })
+      .order("refreshed_at", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+  ) as { id: number } | null;
+  const ratings = new Map<string, { rating: number; matches: number }>();
+  if (!list) return ratings;
+  for (let from = 0; ; from += PAGE) {
+    const rows = check(
+      await db
+        .from("ranking_entries")
+        .select("contestant_id, rating, matches")
+        .eq("list_id", list.id)
+        .eq("judged", true)
+        .order("position")
+        .range(from, from + PAGE - 1),
+    ) as { contestant_id: string; rating: number; matches: number }[];
+    for (const r of rows) ratings.set(r.contestant_id, { rating: r.rating, matches: r.matches });
+    if (rows.length < PAGE) return ratings;
+  }
+}
+
+async function drawInfinitePair(db: SupabaseClient, scope: string[], categoryId: ScopeId, random: Random) {
+  const ratings = await latestRatings(db, categoryId);
+  return pickInfinitePair(
+    scope.map((id) => ({ id, ...(ratings.get(id) ?? { rating: UNJUDGED_RATING, matches: 0 }) })),
+    random,
+  );
+}
+
+/**
+ * The pair the person is being offered in Infinite Mode on the scope. The same pair comes back
+ * until they pick a winner or skip it; then a new one is drawn, favoring contestants with few
+ * matches and close ratings (see `pickInfinitePair`).
+ */
+export async function getInfinitePair(
+  db: SupabaseClient,
+  person: Person,
+  categoryId: ScopeId,
+  { random = Math.random }: { random?: Random } = {},
+): Promise<InfinitePair> {
+  const name = await scopeName(db, categoryId);
+  const scope = await scopeContestantIds(db, categoryId);
+  if (scope.length < INFINITE_MODE_MIN_SCOPE) throw new GameError("Infinite Mode needs a scope of at least 2 contestants.");
+
+  let row = await offeredPair(db, person, categoryId);
+  if (row && !(scope.includes(row.first_contestant_id) && scope.includes(row.second_contestant_id))) {
+    check(await db.from("infinite_pairs").delete().eq("id", row.id));
+    row = null;
+  }
+  if (!row) {
+    const [first, second] = await drawInfinitePair(db, scope, categoryId, random);
+    const { data, error } = await db
+      .from("infinite_pairs")
+      .insert({ ...ownerColumns(person), category_id: categoryId, first_contestant_id: first, second_contestant_id: second })
+      .select(INFINITE_PAIR_COLUMNS)
+      .single();
+    if (error && error.code !== "23505") throw error;
+    // On a conflict another request offered a pair first; offer that one.
+    row = data ?? (await offeredPair(db, person, categoryId))!;
+  }
+
+  const ids = [row.first_contestant_id, row.second_contestant_id];
+  const cards = check(
+    await db.from("contestants").select("id, name, picture_512_url, picture_128_url").in("id", ids),
+  ) as { id: string; name: string; picture_512_url: string; picture_128_url: string }[];
+  const card = (id: string): ContestantCard => {
+    const c = cards.find((c) => c.id === id)!;
+    return { id: c.id, name: c.name, picture512Url: c.picture_512_url, picture128Url: c.picture_128_url };
+  };
+  return { pairId: row.id, categoryId, scopeName: name, contestants: [card(ids[0]), card(ids[1])] };
+}
+
+/** Takes the person's offered pair off the table, so it can be picked or skipped only once. */
+async function claimInfinitePair(db: SupabaseClient, person: Person, pairId: string, winnerId?: string) {
+  const gone = new GameError("That pair was already picked or skipped.");
+  if (!UUID.test(pairId)) throw gone;
+  const row = check(
+    await db.from("infinite_pairs").select(INFINITE_PAIR_COLUMNS).eq("id", pairId).match(ownedBy(person)).maybeSingle(),
+  ) as InfinitePairRow | null;
+  if (!row) throw gone;
+  if (winnerId !== undefined && winnerId !== row.first_contestant_id && winnerId !== row.second_contestant_id) {
+    throw new GameError("That contestant isn't in the current pair.");
+  }
+  const claimed = check(await db.from("infinite_pairs").delete().eq("id", row.id).select("id"));
+  if (claimed.length === 0) throw gone;
+  return row;
+}
+
+/** Records the person's pick from their offered Infinite Mode pair as a match in the pair's scope. */
+export async function pickInfiniteWinner(
+  db: SupabaseClient,
+  person: Person,
+  { pairId, winnerId }: { pairId: string; winnerId: string },
+): Promise<InfinitePick> {
+  const row = await claimInfinitePair(db, person, pairId, winnerId);
+  const rated = false;
+  check(
+    await db.from("matches").insert({
+      winner_id: winnerId,
+      loser_id: winnerId === row.first_contestant_id ? row.second_contestant_id : row.first_contestant_id,
+      category_id: row.category_id,
+      ...ownerColumns(person),
+      rated,
+    }),
+  );
+  return { rated };
+}
+
+/** Passes on the person's offered Infinite Mode pair without recording a match. */
+export async function skipInfinitePair(db: SupabaseClient, person: Person, { pairId }: { pairId: string }): Promise<void> {
+  await claimInfinitePair(db, person, pairId);
 }
 
 /** The person's tournaments still in progress, newest first, so they can pick up where they left off. */
